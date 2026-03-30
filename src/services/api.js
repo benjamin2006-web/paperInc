@@ -1,7 +1,6 @@
 import axios from 'axios';
 
-const API_URL =
-  import.meta.env.VITE_API_URL || 'https://paperincbackend.onrender.com';
+const API_URL = import.meta.env.VITE_API_URL || 'https://paperincbackend.onrender.com';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -18,9 +17,18 @@ console.log('🔧 API Configuration:', {
   timestamp: new Date().toISOString(),
 });
 
-// Request interceptor to add auth token and log requests
+// ✅ ADD THIS: Request interceptor to add /api prefix
 api.interceptors.request.use(
   (config) => {
+    // Add /api prefix for all requests except health check
+    // and requests that already have /api or are absolute URLs
+    if (!config.url.startsWith('/health') && 
+        !config.url.startsWith('/api/') && 
+        !config.url.startsWith('http')) {
+      config.url = `/api${config.url}`;
+      console.log(`🔄 Rewriting URL to: ${config.url}`);
+    }
+    
     // Prevent empty URL calls
     if (!config.url || config.url === '' || config.url === '/') {
       console.error('❌ Blocked API call with empty URL');
