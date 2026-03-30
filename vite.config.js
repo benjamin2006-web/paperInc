@@ -21,13 +21,11 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
-    // ✅ FIX 1: Change 'esbuild' to 'oxc' for Vite 8 compatibility
-    // without needing to install extra packages.
-    minify: 'oxc',
+    // ✅ Change from 'oxc' to 'esbuild' for better Vercel compatibility
+    minify: 'esbuild',
     sourcemap: false,
     rollupOptions: {
       output: {
-        // ✅ FIX 2: Correct function syntax for Vite 8/Rolldown
         manualChunks(id) {
           if (
             id.includes('react') ||
