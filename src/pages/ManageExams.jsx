@@ -16,7 +16,8 @@ import {
   FiChevronUp,
 } from 'react-icons/fi';
 import api from '../services/api';
-const BASE_URL = 'https://paperincbackend.onrender.com';
+
+// ✅ Remove hardcoded BASE_URL - use api instance instead
 const ManageExams = () => {
   const [papers, setPapers] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -53,12 +54,17 @@ const ManageExams = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Load categories
+      // Load categories - interceptor will add /api prefix
       const categoriesResponse = await api.get('/categories');
-      if (categoriesResponse.data && Array.isArray(categoriesResponse.data)) {
-        setCategories(
-          categoriesResponse.data.filter((cat) => cat.enabled !== false),
-        );
+      console.log('Categories response:', categoriesResponse.data);
+      
+      // Handle both array and object response
+      if (Array.isArray(categoriesResponse.data)) {
+        setCategories(categoriesResponse.data.filter((cat) => cat.enabled !== false));
+      } else if (categoriesResponse.data?.data && Array.isArray(categoriesResponse.data.data)) {
+        setCategories(categoriesResponse.data.data.filter((cat) => cat.enabled !== false));
+      } else {
+        setCategories([]);
       }
 
       // Load papers
@@ -78,9 +84,19 @@ const ManageExams = () => {
   const fetchPapers = async () => {
     try {
       const response = await api.get('/papers');
-      setPapers(response.data.data);
+      console.log('Papers response:', response.data);
+      
+      // Handle both array and object response
+      if (Array.isArray(response.data)) {
+        setPapers(response.data);
+      } else if (response.data?.data && Array.isArray(response.data.data)) {
+        setPapers(response.data.data);
+      } else {
+        setPapers([]);
+      }
     } catch (error) {
       console.error('Error fetching papers:', error);
+      setPapers([]);
     }
   };
 
@@ -95,7 +111,8 @@ const ManageExams = () => {
       setSelectAll(false);
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     } catch (error) {
-      setMessage({ type: 'error', text: 'Delete failed' });
+      console.error('Delete error:', error);
+      setMessage({ type: 'error', text: error.response?.data?.message || 'Delete failed' });
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     }
   };
@@ -114,6 +131,7 @@ const ManageExams = () => {
       setSelectAll(false);
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     } catch (error) {
+      console.error('Bulk delete error:', error);
       setMessage({ type: 'error', text: 'Bulk delete failed' });
     }
   };
@@ -149,6 +167,7 @@ const ManageExams = () => {
       await fetchPapers();
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     } catch (error) {
+      console.error('Delete selected error:', error);
       setMessage({ type: 'error', text: 'Bulk delete failed' });
     }
   };
@@ -211,6 +230,15 @@ const ManageExams = () => {
       } else if (sortField === 'createdAt') {
         aVal = new Date(a.createdAt);
         bVal = new Date(b.createdAt);
+      } else if (sortField === 'filename') {
+        aVal = (a.filename || a.title || '').toLowerCase();
+        bVal = (b.filename || b.title || '').toLowerCase();
+      } else if (sortField === 'category') {
+        aVal = getCategoryDisplayName(a.category).toLowerCase();
+        bVal = getCategoryDisplayName(b.category).toLowerCase();
+      } else if (sortField === 'trade') {
+        aVal = (a.trade || '').toLowerCase();
+        bVal = (b.trade || '').toLowerCase();
       }
 
       if (sortOrder === 'asc') {
@@ -233,8 +261,8 @@ const ManageExams = () => {
   ]);
 
   const getCategoryDisplayName = (categoryId) => {
-    const category = categories.find((c) => c.id === categoryId);
-    return category ? category.name : categoryId;
+    const category = categories.find((c) => c._id === categoryId || c.id === categoryId);
+    return category ? category.name : categoryId || 'Unknown';
   };
 
   const hasActiveFilters =
@@ -273,7 +301,7 @@ const ManageExams = () => {
     ]);
 
     const csvContent = [headers, ...rows]
-      .map((row) => row.join(','))
+      .map((row) => row.map(cell => `"${cell}"`).join(','))
       .join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -389,7 +417,7 @@ const ManageExams = () => {
               >
                 <option value=''>All Categories</option>
                 {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
+                  <option key={cat._id || cat.id} value={cat._id || cat.id}>
                     {cat.name}
                   </option>
                 ))}
@@ -604,11 +632,10 @@ const ManageExams = () => {
                       </td>
                       <td className='px-4 py-3'>
                         <div className='flex gap-2'>
-                         <a
-                          href={`${BASE_URL}/api/papers/view/${paper._id}`}
-                          target='_blank'
-                         rel='noopener noreferrer'
-
+                          <a
+                            href={`${api.defaults.baseURL}/api/papers/view/${paper._id}`}
+                            target='_blank'
+                            rel='noopener noreferrer'
                             className='p-1 text-gray-400 hover:text-blue-600 transition'
                             title='View Paper'
                           >
