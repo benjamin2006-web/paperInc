@@ -87,7 +87,6 @@ const ManageUsers = () => {
         api.get('/api/admin/stats/vip'),
       ]);
       
-      // ✅ Handle different response structures
       let usersData = [];
       if (usersRes.data.users) {
         usersData = usersRes.data.users;
@@ -119,7 +118,90 @@ const ManageUsers = () => {
     }
   };
 
-  // ... rest of the functions (handleActivateVIP, handleRemoveVIP, etc.) remain the same ...
+  // ✅ Handle Activate VIP
+  const handleActivateVIP = async (user, duration, paymentRef = '') => {
+    try {
+      const price = pricing[duration].price;
+
+      const response = await api.put(`/api/admin/users/${user._id}/vip`, {
+        isVIP: true,
+        durationMonths: duration,
+        paymentMethod: paymentMethod,
+        paymentReference: paymentRef,
+        amount: price,
+      });
+
+      // Update user in list
+      setUsers(users.map((u) => (u._id === user._id ? response.data.user : u)));
+
+      setMessage({
+        type: 'success',
+        text: `${user.name} is now VIP for ${duration} month(s)! Payment: ${price} FRW`,
+      });
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      loadData(); // Refresh stats
+    } catch (error) {
+      console.error('Activate VIP error:', error);
+      setMessage({ 
+        type: 'error', 
+        text: error.response?.data?.message || 'Failed to activate VIP' 
+      });
+    }
+    setShowVIPModal(false);
+    setShowPaymentModal(false);
+    setSelectedUser(null);
+    setPaymentReference('');
+    setPaymentMethod('cash');
+  };
+
+  // ✅ Handle Remove VIP
+  const handleRemoveVIP = async (user) => {
+    try {
+      const response = await api.put(`/api/admin/users/${user._id}/vip`, {
+        isVIP: false,
+        durationMonths: 0,
+      });
+
+      setUsers(users.map((u) => (u._id === user._id ? response.data.user : u)));
+
+      setMessage({
+        type: 'success',
+        text: `${user.name} is now a Regular user`,
+      });
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      loadData();
+    } catch (error) {
+      console.error('Remove VIP error:', error);
+      setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to remove VIP' });
+    }
+    setShowVIPModal(false);
+    setSelectedUser(null);
+  };
+
+  // ✅ Handle Delete User
+  const handleDeleteUser = async (user) => {
+    if (!confirm(`Are you sure you want to delete ${user.name}? This action cannot be undone.`)) return;
+
+    try {
+      await api.delete(`/api/admin/users/${user._id}`);
+      setUsers(users.filter((u) => u._id !== user._id));
+      setMessage({ type: 'success', text: `${user.name} deleted successfully` });
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      loadData(); // Refresh stats
+    } catch (error) {
+      console.error('Delete user error:', error);
+      setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to delete user' });
+    }
+  };
+
+  // ✅ Handle Payment Submit
+  const handlePaymentSubmit = () => {
+    if (!paymentReference && paymentMethod !== 'cash') {
+      setMessage({ type: 'error', text: 'Please enter payment reference' });
+      return;
+    }
+    handleActivateVIP(selectedUser, vipDuration, paymentReference);
+  };
 
   const getVIPStatus = (user) => {
     if (!user.isVIP)
@@ -355,6 +437,190 @@ const ManageUsers = () => {
             )}
           </div>
         </div>
+
+        {/* VIP Modal */}
+        {showVIPModal && selectedUser && (
+          <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4'>
+            <div className='bg-white rounded-xl max-w-md w-full p-6'>
+              <div className='flex justify-between items-center mb-4'>
+                <h2 className='text-xl font-semibold text-black'>
+                  Manage VIP for {selectedUser.name}
+                </h2>
+                <button
+                  onClick={() => setShowVIPModal(false)}
+                  className='text-gray-400 hover:text-gray-600'
+                >
+                  <FiX className='w-5 h-5' />
+                </button>
+              </div>
+
+              <div className='space-y-4'>
+                <div
+                  className={`p-4 rounded-lg ${selectedUser.isVIP ? 'bg-yellow-50' : 'bg-gray-50'}`}
+                >
+                  <p className='text-sm text-gray-600 mb-2'>
+                    Current Status:{' '}
+                    <strong
+                      className={
+                        selectedUser.isVIP ? 'text-yellow-600' : 'text-gray-800'
+                      }
+                    >
+                      {selectedUser.isVIP ? 'VIP Member' : 'Regular User'}
+                    </strong>
+                  </p>
+                  {selectedUser.vipExpiryDate && (
+                    <p className='text-xs text-gray-500'>
+                      Expires:{' '}
+                      {new Date(
+                        selectedUser.vipExpiryDate,
+                      ).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+
+                {selectedUser.isVIP ? (
+                  <button
+                    onClick={() => handleRemoveVIP(selectedUser)}
+                    className='w-full bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 transition'
+                  >
+                    Remove VIP
+                  </button>
+                ) : (
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700 mb-2'>
+                      Select VIP Package
+                    </label>
+                    <div className='grid grid-cols-2 gap-3 mb-4'>
+                      {Object.values(pricing).map((pkg) => (
+                        <button
+                          key={pkg.months}
+                          onClick={() => setVipDuration(pkg.months)}
+                          className={`p-3 border rounded-lg text-center transition ${
+                            vipDuration === pkg.months
+                              ? 'border-yellow-500 bg-yellow-50 text-yellow-700'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className='font-bold'>{pkg.label}</div>
+                          <div className='text-sm'>
+                            {formatCurrency(pkg.price)}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setShowVIPModal(false);
+                        setShowPaymentModal(true);
+                      }}
+                      className='w-full bg-yellow-500 text-white py-2 rounded-lg hover:bg-yellow-600 transition'
+                    >
+                      Continue to Payment
+                    </button>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setShowVIPModal(false)}
+                  className='w-full border border-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-50 transition'
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Payment Modal */}
+        {showPaymentModal && selectedUser && (
+          <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4'>
+            <div className='bg-white rounded-xl max-w-md w-full p-6'>
+              <div className='flex justify-between items-center mb-4'>
+                <h2 className='text-xl font-semibold text-black'>
+                  Payment Details
+                </h2>
+                <button
+                  onClick={() => setShowPaymentModal(false)}
+                  className='text-gray-400 hover:text-gray-600'
+                >
+                  <FiX className='w-5 h-5' />
+                </button>
+              </div>
+
+              <div className='space-y-4'>
+                <div className='bg-yellow-50 p-4 rounded-lg text-center'>
+                  <p className='text-sm text-gray-600'>Amount to Pay</p>
+                  <p className='text-2xl font-bold text-yellow-600'>
+                    {formatCurrency(pricing[vipDuration].price)}
+                  </p>
+                  <p className='text-xs text-gray-500 mt-1'>
+                    {pricing[vipDuration].label} VIP Access
+                  </p>
+                </div>
+
+                <div>
+                  <label className='block text-sm font-medium text-gray-700 mb-2'>
+                    Payment Method
+                  </label>
+                  <div className='grid grid-cols-2 gap-3'>
+                    <button
+                      onClick={() => setPaymentMethod('cash')}
+                      className={`p-3 border rounded-lg text-center transition ${
+                        paymentMethod === 'cash'
+                          ? 'border-yellow-500 bg-yellow-50 text-yellow-700'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <FiCreditCard className='w-5 h-5 mx-auto mb-1' />
+                      <div className='text-sm'>Cash</div>
+                    </button>
+                    <button
+                      onClick={() => setPaymentMethod('mobile')}
+                      className={`p-3 border rounded-lg text-center transition ${
+                        paymentMethod === 'mobile'
+                          ? 'border-yellow-500 bg-yellow-50 text-yellow-700'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <FiSmartphone className='w-5 h-5 mx-auto mb-1' />
+                      <div className='text-sm'>Mobile Money</div>
+                    </button>
+                  </div>
+                </div>
+
+                {paymentMethod !== 'cash' && (
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700 mb-2'>
+                      Payment Reference / Transaction ID
+                    </label>
+                    <input
+                      type='text'
+                      value={paymentReference}
+                      onChange={(e) => setPaymentReference(e.target.value)}
+                      placeholder='Enter MTN/Airtel transaction ID'
+                      className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black outline-none'
+                    />
+                  </div>
+                )}
+
+                <button
+                  onClick={handlePaymentSubmit}
+                  className='w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition'
+                >
+                  Confirm Payment - {formatCurrency(pricing[vipDuration].price)}
+                </button>
+
+                <button
+                  onClick={() => setShowPaymentModal(false)}
+                  className='w-full border border-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-50 transition'
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
