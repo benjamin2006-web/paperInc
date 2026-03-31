@@ -2,9 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   FiUsers,
   FiStar,
-  FiCalendar,
   FiDollarSign,
-  FiEdit2,
   FiTrash2,
   FiCheck,
   FiX,
@@ -30,7 +28,6 @@ const ManageUsers = () => {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Pricing in FRW
   const pricing = {
     1: { months: 1, price: 500, label: '1 Month' },
     3: { months: 3, price: 1200, label: '3 Months' },
@@ -38,7 +35,6 @@ const ManageUsers = () => {
     12: { months: 12, price: 3500, label: '12 Months' },
   };
 
-  // Check if user is admin on mount
   useEffect(() => {
     checkAdminAccess();
   }, []);
@@ -52,17 +48,15 @@ const ManageUsers = () => {
         text: 'Admin access required. Please login as admin.' 
       });
       setLoading(false);
-      
-      // Redirect to admin login after 2 seconds
       setTimeout(() => {
         window.location.href = '/admin/login';
       }, 2000);
       return;
     }
     
-    // Verify admin token is valid
     try {
-      const response = await api.get('/auth/admin/verify');
+      // Verify admin token
+      const response = await api.get('/api/auth/admin/verify');
       if (response.data.success) {
         setIsAdmin(true);
         loadData();
@@ -88,23 +82,26 @@ const ManageUsers = () => {
     
     setLoading(true);
     try {
+      // ✅ Use correct API URLs with /api prefix
       const [usersRes, statsRes] = await Promise.all([
-        api.get('/admin/users'),
-        api.get('/admin/stats/vip'),
+        api.get('/api/admin/users'),
+        api.get('/api/admin/stats/vip'),
       ]);
+      
       setUsers(usersRes.data.users || []);
       setStats(statsRes.data.stats);
     } catch (error) {
       console.error('Error loading data:', error);
       
-      // Handle 401 Unauthorized
       if (error.response?.status === 401) {
         setMessage({ type: 'error', text: 'Session expired. Please login again.' });
         setTimeout(() => {
           window.location.href = '/admin/login';
         }, 2000);
+      } else if (error.response?.status === 404) {
+        setMessage({ type: 'error', text: 'API endpoint not found. Check backend routes.' });
       } else {
-        setMessage({ type: 'error', text: 'Failed to load users' });
+        setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to load users' });
       }
     } finally {
       setLoading(false);
@@ -115,7 +112,7 @@ const ManageUsers = () => {
     try {
       const price = pricing[duration].price;
 
-      const response = await api.put(`/admin/users/${user._id}/vip`, {
+      const response = await api.put(`/api/admin/users/${user._id}/vip`, {
         isVIP: true,
         durationMonths: duration,
         paymentMethod: paymentMethod,
@@ -130,17 +127,10 @@ const ManageUsers = () => {
         text: `${user.name} is now VIP for ${duration} month(s)! Payment: ${price} FRW`,
       });
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-      loadData(); // Refresh stats
+      loadData();
     } catch (error) {
       console.error('Activate VIP error:', error);
-      if (error.response?.status === 401) {
-        setMessage({ type: 'error', text: 'Session expired. Please login again.' });
-        setTimeout(() => {
-          window.location.href = '/admin/login';
-        }, 2000);
-      } else {
-        setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to activate VIP' });
-      }
+      setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to activate VIP' });
     }
     setShowVIPModal(false);
     setShowPaymentModal(false);
@@ -151,7 +141,7 @@ const ManageUsers = () => {
 
   const handleRemoveVIP = async (user) => {
     try {
-      const response = await api.put(`/admin/users/${user._id}/vip`, {
+      const response = await api.put(`/api/admin/users/${user._id}/vip`, {
         isVIP: false,
         durationMonths: 0,
       });
@@ -166,14 +156,7 @@ const ManageUsers = () => {
       loadData();
     } catch (error) {
       console.error('Remove VIP error:', error);
-      if (error.response?.status === 401) {
-        setMessage({ type: 'error', text: 'Session expired. Please login again.' });
-        setTimeout(() => {
-          window.location.href = '/admin/login';
-        }, 2000);
-      } else {
-        setMessage({ type: 'error', text: 'Failed to remove VIP' });
-      }
+      setMessage({ type: 'error', text: 'Failed to remove VIP' });
     }
     setShowVIPModal(false);
     setSelectedUser(null);
@@ -183,21 +166,14 @@ const ManageUsers = () => {
     if (!confirm(`Are you sure you want to delete ${user.name}?`)) return;
 
     try {
-      await api.delete(`/admin/users/${user._id}`);
+      await api.delete(`/api/admin/users/${user._id}`);
       setUsers(users.filter((u) => u._id !== user._id));
       setMessage({ type: 'success', text: 'User deleted successfully' });
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
       loadData();
     } catch (error) {
       console.error('Delete user error:', error);
-      if (error.response?.status === 401) {
-        setMessage({ type: 'error', text: 'Session expired. Please login again.' });
-        setTimeout(() => {
-          window.location.href = '/admin/login';
-        }, 2000);
-      } else {
-        setMessage({ type: 'error', text: 'Failed to delete user' });
-      }
+      setMessage({ type: 'error', text: 'Failed to delete user' });
     }
   };
 
@@ -230,7 +206,6 @@ const ManageUsers = () => {
     }).format(amount);
   };
 
-  // Show loading
   if (loading && !isAdmin) {
     return (
       <div className='min-h-screen bg-white flex items-center justify-center'>
@@ -242,7 +217,6 @@ const ManageUsers = () => {
     );
   }
 
-  // Show not authorized
   if (!isAdmin && !loading) {
     return (
       <div className='min-h-screen bg-white flex items-center justify-center'>
