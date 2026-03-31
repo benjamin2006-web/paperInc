@@ -13,6 +13,7 @@ import {
   FiAward,
   FiCreditCard,
   FiSmartphone,
+  FiAlertCircle,
 } from 'react-icons/fi';
 import api from '../services/api';
 
@@ -27,6 +28,7 @@ const ManageUsers = () => {
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [paymentReference, setPaymentReference] = useState('');
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Pricing in FRW
   const pricing = {
@@ -36,22 +38,74 @@ const ManageUsers = () => {
     12: { months: 12, price: 3500, label: '12 Months' },
   };
 
+  // Check if user is admin on mount
   useEffect(() => {
-    loadData();
+    checkAdminAccess();
   }, []);
 
+  const checkAdminAccess = async () => {
+    const adminToken = localStorage.getItem('adminToken');
+    
+    if (!adminToken) {
+      setMessage({ 
+        type: 'error', 
+        text: 'Admin access required. Please login as admin.' 
+      });
+      setLoading(false);
+      
+      // Redirect to admin login after 2 seconds
+      setTimeout(() => {
+        window.location.href = '/admin/login';
+      }, 2000);
+      return;
+    }
+    
+    // Verify admin token is valid
+    try {
+      const response = await api.get('/auth/admin/verify');
+      if (response.data.success) {
+        setIsAdmin(true);
+        loadData();
+      } else {
+        throw new Error('Invalid admin token');
+      }
+    } catch (error) {
+      console.error('Admin verification failed:', error);
+      localStorage.removeItem('adminToken');
+      localStorage.removeItem('adminData');
+      setMessage({ 
+        type: 'error', 
+        text: 'Session expired. Please login again.' 
+      });
+      setTimeout(() => {
+        window.location.href = '/admin/login';
+      }, 2000);
+    }
+  };
+
   const loadData = async () => {
+    if (!isAdmin) return;
+    
     setLoading(true);
     try {
       const [usersRes, statsRes] = await Promise.all([
         api.get('/admin/users'),
         api.get('/admin/stats/vip'),
       ]);
-      setUsers(usersRes.data.users);
+      setUsers(usersRes.data.users || []);
       setStats(statsRes.data.stats);
     } catch (error) {
       console.error('Error loading data:', error);
-      setMessage({ type: 'error', text: 'Failed to load users' });
+      
+      // Handle 401 Unauthorized
+      if (error.response?.status === 401) {
+        setMessage({ type: 'error', text: 'Session expired. Please login again.' });
+        setTimeout(() => {
+          window.location.href = '/admin/login';
+        }, 2000);
+      } else {
+        setMessage({ type: 'error', text: 'Failed to load users' });
+      }
     } finally {
       setLoading(false);
     }
@@ -78,7 +132,15 @@ const ManageUsers = () => {
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
       loadData(); // Refresh stats
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to activate VIP' });
+      console.error('Activate VIP error:', error);
+      if (error.response?.status === 401) {
+        setMessage({ type: 'error', text: 'Session expired. Please login again.' });
+        setTimeout(() => {
+          window.location.href = '/admin/login';
+        }, 2000);
+      } else {
+        setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to activate VIP' });
+      }
     }
     setShowVIPModal(false);
     setShowPaymentModal(false);
@@ -103,7 +165,15 @@ const ManageUsers = () => {
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
       loadData();
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to remove VIP' });
+      console.error('Remove VIP error:', error);
+      if (error.response?.status === 401) {
+        setMessage({ type: 'error', text: 'Session expired. Please login again.' });
+        setTimeout(() => {
+          window.location.href = '/admin/login';
+        }, 2000);
+      } else {
+        setMessage({ type: 'error', text: 'Failed to remove VIP' });
+      }
     }
     setShowVIPModal(false);
     setSelectedUser(null);
@@ -119,7 +189,15 @@ const ManageUsers = () => {
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
       loadData();
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to delete user' });
+      console.error('Delete user error:', error);
+      if (error.response?.status === 401) {
+        setMessage({ type: 'error', text: 'Session expired. Please login again.' });
+        setTimeout(() => {
+          window.location.href = '/admin/login';
+        }, 2000);
+      } else {
+        setMessage({ type: 'error', text: 'Failed to delete user' });
+      }
     }
   };
 
@@ -152,12 +230,36 @@ const ManageUsers = () => {
     }).format(amount);
   };
 
-  if (loading) {
+  // Show loading
+  if (loading && !isAdmin) {
     return (
       <div className='min-h-screen bg-white flex items-center justify-center'>
         <div className='text-center'>
           <FiLoader className='w-12 h-12 animate-spin text-gray-400 mx-auto' />
-          <p className='mt-4 text-gray-600'>Loading users...</p>
+          <p className='mt-4 text-gray-600'>Checking admin access...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show not authorized
+  if (!isAdmin && !loading) {
+    return (
+      <div className='min-h-screen bg-white flex items-center justify-center'>
+        <div className='text-center max-w-md mx-auto p-6'>
+          <div className='inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4'>
+            <FiAlertCircle className='w-8 h-8 text-red-500' />
+          </div>
+          <h2 className='text-xl font-semibold text-black mb-2'>Access Denied</h2>
+          <p className='text-gray-600 mb-4'>
+            You need admin privileges to access this page.
+          </p>
+          <button
+            onClick={() => window.location.href = '/admin/login'}
+            className='px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition'
+          >
+            Go to Admin Login
+          </button>
         </div>
       </div>
     );
@@ -278,64 +380,72 @@ const ManageUsers = () => {
                 </tr>
               </thead>
               <tbody className='divide-y divide-gray-100'>
-                {users.map((user) => {
-                  const vipStatus = getVIPStatus(user);
-                  return (
-                    <tr key={user._id} className='hover:bg-gray-50 transition'>
-                      <td className='px-6 py-4'>
-                        <div className='flex items-center gap-2'>
-                          <span className='font-medium text-gray-900'>
-                            {user.name}
+                {users.length === 0 ? (
+                  <tr>
+                    <td colSpan='6' className='px-6 py-12 text-center text-gray-500'>
+                      No users found
+                    </td>
+                  </tr>
+                ) : (
+                  users.map((user) => {
+                    const vipStatus = getVIPStatus(user);
+                    return (
+                      <tr key={user._id} className='hover:bg-gray-50 transition'>
+                        <td className='px-6 py-4'>
+                          <div className='flex items-center gap-2'>
+                            <span className='font-medium text-gray-900'>
+                              {user.name}
+                            </span>
+                            {user.isVIP &&
+                              user.vipExpiryDate &&
+                              new Date(user.vipExpiryDate) > new Date() && (
+                                <FiStar className='w-4 h-4 text-yellow-500' />
+                              )}
+                          </div>
+                        </td>
+                        <td className='px-6 py-4 text-sm text-gray-600'>
+                          {user.phone}
+                        </td>
+                        <td className='px-6 py-4'>
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${vipStatus.bg} ${vipStatus.color}`}
+                          >
+                            {vipStatus.status}
                           </span>
-                          {user.isVIP &&
-                            user.vipExpiryDate &&
-                            new Date(user.vipExpiryDate) > new Date() && (
-                              <FiStar className='w-4 h-4 text-yellow-500' />
-                            )}
-                        </div>
-                      </td>
-                      <td className='px-6 py-4 text-sm text-gray-600'>
-                        {user.phone}
-                      </td>
-                      <td className='px-6 py-4'>
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${vipStatus.bg} ${vipStatus.color}`}
-                        >
-                          {vipStatus.status}
-                        </span>
-                      </td>
-                      <td className='px-6 py-4 text-sm text-gray-600'>
-                        {user.vipExpiryDate
-                          ? new Date(user.vipExpiryDate).toLocaleDateString()
-                          : '-'}
-                      </td>
-                      <td className='px-6 py-4 text-sm text-gray-600'>
-                        {new Date(user.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className='px-6 py-4'>
-                        <div className='flex gap-2'>
-                          <button
-                            onClick={() => {
-                              setSelectedUser(user);
-                              setShowVIPModal(true);
-                            }}
-                            className='p-1 text-blue-600 hover:text-blue-800 transition'
-                            title='Manage VIP'
-                          >
-                            <FiStar className='w-5 h-5' />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteUser(user)}
-                            className='p-1 text-red-600 hover:text-red-800 transition'
-                            title='Delete User'
-                          >
-                            <FiTrash2 className='w-5 h-5' />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        </td>
+                        <td className='px-6 py-4 text-sm text-gray-600'>
+                          {user.vipExpiryDate
+                            ? new Date(user.vipExpiryDate).toLocaleDateString()
+                            : '-'}
+                        </td>
+                        <td className='px-6 py-4 text-sm text-gray-600'>
+                          {new Date(user.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className='px-6 py-4'>
+                          <div className='flex gap-2'>
+                            <button
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setShowVIPModal(true);
+                              }}
+                              className='p-1 text-blue-600 hover:text-blue-800 transition'
+                              title='Manage VIP'
+                            >
+                              <FiStar className='w-5 h-5' />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteUser(user)}
+                              className='p-1 text-red-600 hover:text-red-800 transition'
+                              title='Delete User'
+                            >
+                              <FiTrash2 className='w-5 h-5' />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
