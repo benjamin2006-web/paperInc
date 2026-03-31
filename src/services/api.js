@@ -17,11 +17,10 @@ console.log('🔧 API Configuration:', {
   timestamp: new Date().toISOString(),
 });
 
-// ✅ ADD THIS: Request interceptor to add /api prefix
+// ✅ Request interceptor
 api.interceptors.request.use(
   (config) => {
     // Add /api prefix for all requests except health check
-    // and requests that already have /api or are absolute URLs
     if (!config.url.startsWith('/health') && 
         !config.url.startsWith('/api/') && 
         !config.url.startsWith('http')) {
@@ -29,10 +28,16 @@ api.interceptors.request.use(
       console.log(`🔄 Rewriting URL to: ${config.url}`);
     }
     
+    // ✅ ADD THIS: Add limit=200 to papers requests
+    if (config.url.includes('/papers') && !config.url.includes('limit=')) {
+      const separator = config.url.includes('?') ? '&' : '?';
+      config.url = `${config.url}${separator}limit=200&page=1`;
+      console.log(`📚 Adding limit=200 to papers request: ${config.url}`);
+    }
+    
     // Prevent empty URL calls
     if (!config.url || config.url === '' || config.url === '/') {
       console.error('❌ Blocked API call with empty URL');
-      console.trace('Empty URL call stack:');
       return Promise.reject(new Error('Invalid API endpoint - URL is empty'));
     }
 
@@ -89,21 +94,18 @@ api.interceptors.response.use(
       const currentPath = window.location.pathname;
       console.log(`🔒 401 Unauthorized on path: ${currentPath}`);
 
-      // Check if we're on an admin page
       if (currentPath.startsWith('/admin') && currentPath !== '/admin/login') {
         console.log('Redirecting to admin login...');
         localStorage.removeItem('adminToken');
         localStorage.removeItem('adminData');
         window.location.href = '/admin/login';
       }
-      // Check if we're on a user profile page and token is invalid
       else if (currentPath === '/profile') {
         console.log('Redirecting to user login...');
         localStorage.removeItem('userToken');
         localStorage.removeItem('userData');
         window.location.href = '/login';
       }
-      // For other user routes, just clear tokens and redirect to login
       else if (
         !currentPath.startsWith('/admin') &&
         currentPath !== '/login' &&
