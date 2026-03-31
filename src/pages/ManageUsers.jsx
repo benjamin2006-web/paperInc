@@ -118,6 +118,22 @@ const ManageUsers = () => {
     }
   };
 
+  // ✅ Handle Delete User
+  const handleDeleteUser = async (user) => {
+    if (!confirm(`Are you sure you want to delete ${user.name}? This action cannot be undone.`)) return;
+
+    try {
+      await api.delete(`/api/admin/users/${user._id}`);
+      setUsers(users.filter((u) => u._id !== user._id));
+      setMessage({ type: 'success', text: `${user.name} deleted successfully` });
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      loadData(); // Refresh stats
+    } catch (error) {
+      console.error('Delete user error:', error);
+      setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to delete user' });
+    }
+  };
+
   // ✅ Handle Activate VIP
   const handleActivateVIP = async (user, duration, paymentRef = '') => {
     try {
@@ -131,7 +147,6 @@ const ManageUsers = () => {
         amount: price,
       });
 
-      // Update user in list
       setUsers(users.map((u) => (u._id === user._id ? response.data.user : u)));
 
       setMessage({
@@ -139,7 +154,7 @@ const ManageUsers = () => {
         text: `${user.name} is now VIP for ${duration} month(s)! Payment: ${price} FRW`,
       });
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-      loadData(); // Refresh stats
+      loadData();
     } catch (error) {
       console.error('Activate VIP error:', error);
       setMessage({ 
@@ -176,22 +191,6 @@ const ManageUsers = () => {
     }
     setShowVIPModal(false);
     setSelectedUser(null);
-  };
-
-  // ✅ Handle Delete User
-  const handleDeleteUser = async (user) => {
-    if (!confirm(`Are you sure you want to delete ${user.name}? This action cannot be undone.`)) return;
-
-    try {
-      await api.delete(`/api/admin/users/${user._id}`);
-      setUsers(users.filter((u) => u._id !== user._id));
-      setMessage({ type: 'success', text: `${user.name} deleted successfully` });
-      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-      loadData(); // Refresh stats
-    } catch (error) {
-      console.error('Delete user error:', error);
-      setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to delete user' });
-    }
   };
 
   // ✅ Handle Payment Submit
