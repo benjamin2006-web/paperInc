@@ -4,7 +4,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'https://paperincbackend.onrende
 
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 30000,
+  timeout: 60000, // Increased timeout for large data
   headers: {
     'Content-Type': 'application/json',
   },
@@ -17,7 +17,7 @@ console.log('🔧 API Configuration:', {
   timestamp: new Date().toISOString(),
 });
 
-// ✅ Request interceptor
+// Request interceptor
 api.interceptors.request.use(
   (config) => {
     // Add /api prefix for all requests except health check
@@ -28,11 +28,13 @@ api.interceptors.request.use(
       console.log(`🔄 Rewriting URL to: ${config.url}`);
     }
     
-    // ✅ ADD THIS: Add limit=200 to papers requests
-    if (config.url.includes('/papers') && !config.url.includes('limit=')) {
+    // ✅ Get ALL papers - use very high limit (10000)
+    if (config.url.includes('/papers') && 
+        !config.url.includes('limit=') && 
+        config.method === 'get') {
       const separator = config.url.includes('?') ? '&' : '?';
-      config.url = `${config.url}${separator}limit=200&page=1`;
-      console.log(`📚 Adding limit=200 to papers request: ${config.url}`);
+      config.url = `${config.url}${separator}limit=10000&page=1`;
+      console.log(`📚 Papers request (all papers): ${config.url}`);
     }
     
     // Prevent empty URL calls
@@ -73,14 +75,12 @@ api.interceptors.request.use(
 // Response interceptor for error handling and logging
 api.interceptors.response.use(
   (response) => {
-    // Log successful responses
     console.log(
       `✅ API Response: ${response.status} ${response.config.method.toUpperCase()} ${response.config.url}`,
     );
     return response;
   },
   (error) => {
-    // Log error details
     console.error('❌ API Error:', {
       message: error.message,
       status: error.response?.status,
