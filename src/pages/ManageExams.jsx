@@ -17,7 +17,6 @@ import {
 } from 'react-icons/fi';
 import api from '../services/api';
 
-// ✅ Remove hardcoded BASE_URL - use api instance instead
 const ManageExams = () => {
   const [papers, setPapers] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -26,7 +25,7 @@ const ManageExams = () => {
   const [filterCategory, setFilterCategory] = useState('');
   const [filterYear, setFilterYear] = useState('');
   const [filterTrade, setFilterTrade] = useState('');
-  const [filterVIP, setFilterVIP] = useState('all'); // all, vip, free
+  const [filterVIP, setFilterVIP] = useState('all');
   const [message, setMessage] = useState({ type: '', text: '' });
   const [selectedPapers, setSelectedPapers] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
@@ -34,13 +33,11 @@ const ManageExams = () => {
   const [sortField, setSortField] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState('desc');
 
-  // Get unique years from papers
   const years = useMemo(
     () => [...new Set(papers.map((p) => p.year))].sort((a, b) => b - a),
     [papers],
   );
 
-  // Get unique trades from papers
   const trades = useMemo(
     () =>
       [...new Set(papers.filter((p) => p.trade).map((p) => p.trade))].sort(),
@@ -54,11 +51,9 @@ const ManageExams = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Load categories - interceptor will add /api prefix
       const categoriesResponse = await api.get('/categories');
       console.log('Categories response:', categoriesResponse.data);
       
-      // Handle both array and object response
       if (Array.isArray(categoriesResponse.data)) {
         setCategories(categoriesResponse.data.filter((cat) => cat.enabled !== false));
       } else if (categoriesResponse.data?.data && Array.isArray(categoriesResponse.data.data)) {
@@ -67,7 +62,6 @@ const ManageExams = () => {
         setCategories([]);
       }
 
-      // Load papers
       await fetchPapers();
     } catch (error) {
       console.error('Error loading data:', error);
@@ -83,17 +77,19 @@ const ManageExams = () => {
 
   const fetchPapers = async () => {
     try {
-      const response = await api.get('/papers');
+      // ✅ Use high limit to get ALL papers
+      const response = await api.get('/papers?limit=10000&page=1');
       console.log('Papers response:', response.data);
       
-      // Handle both array and object response
+      let papersData = [];
       if (Array.isArray(response.data)) {
-        setPapers(response.data);
+        papersData = response.data;
       } else if (response.data?.data && Array.isArray(response.data.data)) {
-        setPapers(response.data.data);
-      } else {
-        setPapers([]);
+        papersData = response.data.data;
       }
+      
+      setPapers(papersData);
+      console.log(`✅ Loaded ${papersData.length} papers (total: ${response.data?.pagination?.total || papersData.length})`);
     } catch (error) {
       console.error('Error fetching papers:', error);
       setPapers([]);
@@ -121,9 +117,7 @@ const ManageExams = () => {
     if (!confirm('Delete ALL papers? This cannot be undone!')) return;
 
     try {
-      const promises = papers.map((paper) =>
-        api.delete(`/papers/${paper._id}`),
-      );
+      const promises = papers.map((paper) => api.delete(`/papers/${paper._id}`));
       await Promise.all(promises);
       setMessage({ type: 'success', text: 'All papers deleted successfully!' });
       await fetchPapers();
@@ -219,7 +213,6 @@ const ManageExams = () => {
       );
     });
 
-    // Apply sorting
     filtered.sort((a, b) => {
       let aVal = a[sortField];
       let bVal = b[sortField];
@@ -249,28 +242,14 @@ const ManageExams = () => {
     });
 
     return filtered;
-  }, [
-    papers,
-    searchTerm,
-    filterCategory,
-    filterYear,
-    filterTrade,
-    filterVIP,
-    sortField,
-    sortOrder,
-  ]);
+  }, [papers, searchTerm, filterCategory, filterYear, filterTrade, filterVIP, sortField, sortOrder]);
 
   const getCategoryDisplayName = (categoryId) => {
     const category = categories.find((c) => c._id === categoryId || c.id === categoryId);
     return category ? category.name : categoryId || 'Unknown';
   };
 
-  const hasActiveFilters =
-    searchTerm ||
-    filterCategory ||
-    filterYear ||
-    filterTrade ||
-    filterVIP !== 'all';
+  const hasActiveFilters = searchTerm || filterCategory || filterYear || filterTrade || filterVIP !== 'all';
 
   const getSortIcon = (field) => {
     if (sortField !== field) return null;
@@ -281,16 +260,8 @@ const ManageExams = () => {
     );
   };
 
-  // Export to CSV
   const exportToCSV = () => {
-    const headers = [
-      'Filename',
-      'Category',
-      'Trade',
-      'Year',
-      'VIP Only',
-      'Uploaded',
-    ];
+    const headers = ['Filename', 'Category', 'Trade', 'Year', 'VIP Only', 'Uploaded'];
     const rows = filteredPapers.map((paper) => [
       paper.filename || paper.title,
       getCategoryDisplayName(paper.category),
@@ -365,7 +336,6 @@ const ManageExams = () => {
         <div className='border border-gray-200 rounded-xl p-6'>
           {/* Toolbar */}
           <div className='flex flex-wrap gap-4 mb-6'>
-            {/* Search Box */}
             <div className='flex-1 min-w-[200px]'>
               <div className='relative'>
                 <FiSearch className='absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5' />
@@ -379,7 +349,6 @@ const ManageExams = () => {
               </div>
             </div>
 
-            {/* Filter Toggle */}
             <button
               onClick={() => setShowFilters(!showFilters)}
               className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition ${
@@ -395,7 +364,6 @@ const ManageExams = () => {
               )}
             </button>
 
-            {/* Clear Filters Button */}
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
@@ -491,27 +459,19 @@ const ManageExams = () => {
           {/* Stats Cards */}
           <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6'>
             <div className='bg-gray-50 rounded-lg p-4 text-center border border-gray-200'>
-              <span className='block text-2xl font-bold text-black'>
-                {papers.length}
-              </span>
+              <span className='block text-2xl font-bold text-black'>{papers.length}</span>
               <span className='text-sm text-gray-600'>Total Papers</span>
             </div>
             <div className='bg-gray-50 rounded-lg p-4 text-center border border-gray-200'>
-              <span className='block text-2xl font-bold text-black'>
-                {filteredPapers.length}
-              </span>
+              <span className='block text-2xl font-bold text-black'>{filteredPapers.length}</span>
               <span className='text-sm text-gray-600'>Showing</span>
             </div>
             <div className='bg-gray-50 rounded-lg p-4 text-center border border-gray-200'>
-              <span className='block text-2xl font-bold text-black'>
-                {papers.filter((p) => p.isVIPOnly).length}
-              </span>
+              <span className='block text-2xl font-bold text-black'>{papers.filter((p) => p.isVIPOnly).length}</span>
               <span className='text-sm text-gray-600'>VIP Papers</span>
             </div>
             <div className='bg-gray-50 rounded-lg p-4 text-center border border-gray-200'>
-              <span className='block text-2xl font-bold text-black'>
-                {papers.filter((p) => !p.isVIPOnly).length}
-              </span>
+              <span className='block text-2xl font-bold text-black'>{papers.filter((p) => !p.isVIPOnly).length}</span>
               <span className='text-sm text-gray-600'>Free Papers</span>
             </div>
           </div>
@@ -529,10 +489,7 @@ const ManageExams = () => {
               <FiSearch className='w-12 h-12 text-gray-400 mx-auto mb-4' />
               <p className='text-gray-500'>No papers found</p>
               {hasActiveFilters && (
-                <button
-                  onClick={clearFilters}
-                  className='mt-4 text-sm text-black underline hover:no-underline'
-                >
+                <button onClick={clearFilters} className='mt-4 text-sm text-black underline hover:no-underline'>
                   Clear all filters
                 </button>
               )}
@@ -550,42 +507,23 @@ const ManageExams = () => {
                         className='w-4 h-4 cursor-pointer'
                       />
                     </th>
-                    <th
-                      className='px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:text-black'
-                      onClick={() => handleSort('filename')}
-                    >
+                    <th className='px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:text-black' onClick={() => handleSort('filename')}>
                       Filename {getSortIcon('filename')}
                     </th>
-                    <th
-                      className='px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:text-black'
-                      onClick={() => handleSort('category')}
-                    >
+                    <th className='px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:text-black' onClick={() => handleSort('category')}>
                       Category {getSortIcon('category')}
                     </th>
-                    <th
-                      className='px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:text-black'
-                      onClick={() => handleSort('trade')}
-                    >
+                    <th className='px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:text-black' onClick={() => handleSort('trade')}>
                       Trade {getSortIcon('trade')}
                     </th>
-                    <th
-                      className='px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:text-black'
-                      onClick={() => handleSort('year')}
-                    >
+                    <th className='px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:text-black' onClick={() => handleSort('year')}>
                       Year {getSortIcon('year')}
                     </th>
-                    <th
-                      className='px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:text-black'
-                      onClick={() => handleSort('createdAt')}
-                    >
+                    <th className='px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:text-black' onClick={() => handleSort('createdAt')}>
                       Uploaded {getSortIcon('createdAt')}
                     </th>
-                    <th className='px-4 py-3 text-left text-sm font-semibold text-gray-700'>
-                      VIP
-                    </th>
-                    <th className='px-4 py-3 text-left text-sm font-semibold text-gray-700'>
-                      Actions
-                    </th>
+                    <th className='px-4 py-3 text-left text-sm font-semibold text-gray-700'>VIP</th>
+                    <th className='px-4 py-3 text-left text-sm font-semibold text-gray-700'>Actions</th>
                   </tr>
                 </thead>
                 <tbody className='divide-y divide-gray-100'>
@@ -608,9 +546,7 @@ const ManageExams = () => {
                           {getCategoryDisplayName(paper.category)}
                         </span>
                       </td>
-                      <td className='px-4 py-3 text-sm text-gray-600'>
-                        {paper.trade || '-'}
-                      </td>
+                      <td className='px-4 py-3 text-sm text-gray-600'>{paper.trade || '-'}</td>
                       <td className='px-4 py-3'>
                         <span className='inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-700'>
                           <FiCalendar className='w-3 h-3' />
@@ -642,12 +578,7 @@ const ManageExams = () => {
                             <FiEye className='w-5 h-5' />
                           </a>
                           <button
-                            onClick={() =>
-                              handleDelete(
-                                paper._id,
-                                paper.filename || paper.title,
-                              )
-                            }
+                            onClick={() => handleDelete(paper._id, paper.filename || paper.title)}
                             className='p-1 text-gray-400 hover:text-red-600 transition'
                             title='Delete paper'
                           >
