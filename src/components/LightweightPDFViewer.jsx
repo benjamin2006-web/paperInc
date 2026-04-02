@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { FiDownload, FiLoader, FiX, FiZoomIn, FiZoomOut } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
+import SnakeGame from './SnakeGame';
 
 const LightweightPDFViewer = ({ paper, isVIP, onClose }) => {
   const navigate = useNavigate();
@@ -9,10 +10,15 @@ const LightweightPDFViewer = ({ paper, isVIP, onClose }) => {
   const [error, setError] = useState(null);
   const [zoom, setZoom] = useState(100);
   const [useFallback, setUseFallback] = useState(false);
+  const [showSnakeGame, setShowSnakeGame] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState('online');
+  const [retryCount, setRetryCount] = useState(0);
   const iframeRef = useRef(null);
   const loadTimeoutRef = useRef(null);
   const progressIntervalRef = useRef(null);
   const startTimeRef = useRef(Date.now());
+  const connectionMonitorRef = useRef(null);
+  const isMountedRef = useRef(true);
 
   // Helper function to detect if URL is raw upload
   const isRawUrl = (url) => {
@@ -35,18 +41,99 @@ const LightweightPDFViewer = ({ paper, isVIP, onClose }) => {
     }
   }, [paper.isVIPOnly, isVIP, navigate, onClose]);
 
+  // Check internet connectivity
+  const checkInternetConnectivity = async () => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      
+      await fetch('https://www.google.com/favicon.ico', {
+        mode: 'no-cors',
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  };
+
+  // Handle connection restoration
+  const handleConnectionRestored = async () => {
+    if (!isMountedRef.current) return;
+    
+    setShowSnakeGame(false);
+    setConnectionStatus('online');
+    
+    // Reset and retry loading the PDF
+    setLoading(true);
+    setError(null);
+    setRetryCount(0);
+    setLoadProgress(0);
+    
+    // Refresh the iframe
+    if (iframeRef.current) {
+      const currentUrl = getOptimizedUrl();
+      iframeRef.current.src = currentUrl;
+    }
+  };
+
+  // Monitor connection status
+  const monitorConnection = async () => {
+    if (!isMountedRef.current) return;
+    
+    const isConnected = await checkInternetConnectivity();
+    
+    if (!isConnected && !showSnakeGame && connectionStatus === 'online') {
+      // Internet lost - show snake game
+      console.log('🌐 Internet lost while viewing PDF - showing snake game');
+      setConnectionStatus('offline');
+      setShowSnakeGame(true);
+      setLoading(false); // Stop loading the PDF
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    } else if (isConnected && showSnakeGame) {
+      // Internet restored - close game and reload PDF
+      console.log('✅ Internet restored - reloading PDF');
+      await handleConnectionRestored();
+    } else if (isConnected && connectionStatus === 'offline') {
+      setConnectionStatus('online');
+    }
+  };
+
+  // Start connection monitoring
+  useEffect(() => {
+    connectionMonitorRef.current = setInterval(monitorConnection, 2000);
+    
+    // Also listen to browser events
+    const handleOnline = () => monitorConnection();
+    const handleOffline = () => monitorConnection();
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      if (connectionMonitorRef.current) {
+        clearInterval(connectionMonitorRef.current);
+      }
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [monitorConnection]);
+
   // Cleanup timeouts on unmount
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
-      if (progressIntervalRef.current)
-        clearInterval(progressIntervalRef.current);
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     };
   }, []);
 
   // Start loading progress simulation
   useEffect(() => {
-    if (loading && !error) {
+    if (loading && !error && !showSnakeGame && connectionStatus === 'online') {
       setLoadProgress(0);
       progressIntervalRef.current = setInterval(() => {
         setLoadProgress((prev) => {
@@ -62,7 +149,7 @@ const LightweightPDFViewer = ({ paper, isVIP, onClose }) => {
       if (progressIntervalRef.current)
         clearInterval(progressIntervalRef.current);
     };
-  }, [loading, error]);
+  }, [loading, error, showSnakeGame, connectionStatus]);
 
   // Generate optimized URL for inline viewing
   const getOptimizedUrl = () => {
@@ -73,21 +160,19 @@ const LightweightPDFViewer = ({ paper, isVIP, onClose }) => {
     }
 
     if (isRaw) {
-      // For raw URLs, add fl_attachment=0 to force inline view
       const separator = paper.pdfUrl.includes('?') ? '&' : '?';
       return `${paper.pdfUrl}${separator}fl_attachment=0`;
     }
 
-    // For image-type PDFs - force inline view with optimizations
     return `${paper.pdfUrl}?fl_attachment=0&quality=50&dpr=0.75`;
   };
 
   // Handle loading timeout - reduced to 15 seconds for faster feedback
   useEffect(() => {
-    if (!loading) return;
+    if (!loading || showSnakeGame || connectionStatus !== 'online') return;
 
     loadTimeoutRef.current = setTimeout(() => {
-      if (loading) {
+      if (loading && !showSnakeGame) {
         if (!useFallback) {
           setUseFallback(true);
           setError('Switching to alternative viewer...');
@@ -104,7 +189,7 @@ const LightweightPDFViewer = ({ paper, isVIP, onClose }) => {
     }, 15000);
 
     return () => clearTimeout(loadTimeoutRef.current);
-  }, [loading, useFallback, paper.pdfUrl]);
+  }, [loading, useFallback, paper.pdfUrl, showSnakeGame, connectionStatus]);
 
   const handleIframeLoad = () => {
     const loadTime = Date.now() - startTimeRef.current;
@@ -118,7 +203,7 @@ const LightweightPDFViewer = ({ paper, isVIP, onClose }) => {
   };
 
   const handleIframeError = () => {
-    if (!useFallback) {
+    if (!useFallback && connectionStatus === 'online') {
       setUseFallback(true);
       setError('Loading failed. Trying alternative viewer...');
       if (iframeRef.current) {
@@ -180,6 +265,28 @@ const LightweightPDFViewer = ({ paper, isVIP, onClose }) => {
     return 'Almost ready...';
   };
 
+  // Show snake game if offline
+  if (showSnakeGame) {
+    return (
+      <div className='fixed inset-0 z-50'>
+        <SnakeGame 
+          onConnectionRestored={handleConnectionRestored}
+          onClose={onClose}
+        />
+        {/* Close button overlay */}
+        <button
+          onClick={onClose}
+          className='fixed top-4 right-4 z-50 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-70 transition'
+        >
+          <FiX className='w-5 h-5' />
+        </button>
+        <div className='fixed bottom-4 left-4 right-4 text-center text-white text-sm z-50 bg-black bg-opacity-50 p-2 rounded-lg'>
+          🐍 Playing Snake while waiting for internet connection...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className='fixed inset-0 bg-black bg-opacity-90 z-50 flex flex-col'>
       {/* Header */}
@@ -210,6 +317,18 @@ const LightweightPDFViewer = ({ paper, isVIP, onClose }) => {
         </div>
 
         <div className='flex items-center gap-1'>
+          {/* Connection status indicator */}
+          <div className={`flex items-center gap-1 mr-2 px-2 py-1 rounded-full text-xs ${
+            connectionStatus === 'online' 
+              ? 'bg-green-50 text-green-600' 
+              : 'bg-yellow-50 text-yellow-600'
+          }`}>
+            <div className={`w-1.5 h-1.5 rounded-full ${
+              connectionStatus === 'online' ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'
+            }`}></div>
+            <span>{connectionStatus === 'online' ? 'Online' 'Slow'}</span>
+          </div>
+          
           {isVIP && (
             <button
               onClick={handleDownload}
@@ -234,7 +353,7 @@ const LightweightPDFViewer = ({ paper, isVIP, onClose }) => {
         style={{ zoom: zoom / 100 }}
       >
         {/* Loading Overlay */}
-        {loading && (
+        {loading && !showSnakeGame && (
           <div className='absolute inset-0 bg-white bg-opacity-95 flex flex-col items-center justify-center z-10'>
             <div className='text-center max-w-xs px-4'>
               <FiLoader className='w-12 h-12 text-gray-400 animate-spin mx-auto mb-4' />
@@ -258,12 +377,19 @@ const LightweightPDFViewer = ({ paper, isVIP, onClose }) => {
               <p className='text-xs text-gray-400 mt-3'>
                 Please wait while the document loads...
               </p>
+              
+              {/* Network status note */}
+              {connectionStatus === 'slow' && (
+                <p className='text-xs text-yellow-600 mt-2'>
+                  ⚡ Slow connection detected. Loading may take a moment...
+                </p>
+              )}
             </div>
           </div>
         )}
 
         {/* Error Message */}
-        {error && !loading && (
+        {error && !loading && !showSnakeGame && (
           <div className='absolute inset-0 bg-white flex flex-col items-center justify-center z-10'>
             <div className='text-center max-w-xs px-4'>
               <div className='text-red-500 text-5xl mb-4'>⚠️</div>
@@ -271,12 +397,26 @@ const LightweightPDFViewer = ({ paper, isVIP, onClose }) => {
                 Failed to Load PDF
               </p>
               <p className='text-sm text-gray-600 mb-4'>{error}</p>
-              <button
-                onClick={() => window.location.reload()}
-                className='px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition text-sm'
-              >
-                Retry
-              </button>
+              <div className='flex gap-2 justify-center'>
+                <button
+                  onClick={() => window.location.reload()}
+                  className='px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition text-sm'
+                >
+                  Retry
+                </button>
+                <button
+                  onClick={() => {
+                    setLoading(true);
+                    setError(null);
+                    if (iframeRef.current) {
+                      iframeRef.current.src = currentUrl;
+                    }
+                  }}
+                  className='px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition text-sm'
+                >
+                  Reload
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -289,7 +429,7 @@ const LightweightPDFViewer = ({ paper, isVIP, onClose }) => {
           className='w-full h-full border-0 bg-white'
           onLoad={handleIframeLoad}
           onError={handleIframeError}
-          style={{ display: loading ? 'none' : 'block' }}
+          style={{ display: loading || showSnakeGame ? 'none' : 'block' }}
           allow='fullscreen'
         />
       </div>
