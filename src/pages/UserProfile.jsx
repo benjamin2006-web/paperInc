@@ -141,7 +141,7 @@ const UserProfile = () => {
         <div className='min-h-[400px] flex items-center justify-center'>
           <div className='text-center'>
             <FiLoader className='w-12 h-12 animate-spin text-gray-400 mx-auto' />
-            <p className='mt-4 text-gray-600'>Ibiro birimo gukoresha...</p>
+            <p className='mt-4 text-gray-600'>Next Inc</p>
           </div>
         </div>
       );
@@ -161,7 +161,7 @@ const UserProfile = () => {
 
           {/* Header */}
           <div className='mb-8'>
-            <h1 className='text-3xl font-bold text-black'>Konti Yanjye</h1>
+            <h1 className='text-3xl font-bold text-black'>Konti Yawe</h1>
             <p className='text-gray-600 mt-1'>
               Reba amakuru yawe n'uburyo bwa VIP
             </p>
@@ -210,7 +210,7 @@ const UserProfile = () => {
                 user?.vipExpiryDate &&
                 new Date(user.vipExpiryDate) > new Date() && (
                   <div className='text-right'>
-                    <p className='text-sm text-gray-600'>VIP izashira mu</p>
+                    <p className='text-sm text-gray-600'>VIP izashira ku</p>
                     <p className='text-2xl font-bold text-yellow-600'>
                       {daysRemaining()} iminsi
                     </p>
@@ -237,11 +237,11 @@ const UserProfile = () => {
               </div>
               <div className='flex items-center gap-2 text-sm text-gray-700'>
                 <FiCheckCircle className='w-4 h-4 text-green-500' />
-                Urakura impapuro zose udasohotse
+               Udawnloading paper zose udasohotse
               </div>
               <div className='flex items-center gap-2 text-sm text-gray-700'>
                 <FiCheckCircle className='w-4 h-4 text-green-500' />
-                Ubona ibikoresho byo kwiga byose
+                Ubona ibyo abandi batabona
               </div>
               <div className='flex items-center gap-2 text-sm text-gray-700'>
                 <FiCheckCircle className='w-4 h-4 text-green-500' />
@@ -354,9 +354,9 @@ const UserProfile = () => {
           {paymentHistory.length === 0 && (
             <div className='bg-white rounded-xl border border-gray-200 p-6 text-center'>
               <FiDollarSign className='w-12 h-12 text-gray-400 mx-auto mb-3' />
-              <p className='text-gray-500'>Nta historic yo kwishyura aboneka</p>
+              <p className='text-gray-500'>Nta historic yo kwishyura iboneka</p>
               <p className='text-sm text-gray-400 mt-1'>
-                Amakuru yo kwishyura azagaragara hano iyo uba VIP
+                Amakuru yo kwishyura azagaragara hano iyo uba VIP igihe Wishyuye
               </p>
             </div>
           )}
