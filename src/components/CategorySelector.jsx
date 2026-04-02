@@ -58,6 +58,17 @@ const addGlobalStyles = () => {
         }
       }
       
+      @keyframes dotPulse {
+        0%, 60%, 100% {
+          transform: scale(1);
+          opacity: 0.6;
+        }
+        30% {
+          transform: scale(1.2);
+          opacity: 1;
+        }
+      }
+      
       .animate-fadeIn {
         animation: fadeIn 0.5s ease-out;
       }
@@ -77,6 +88,22 @@ const addGlobalStyles = () => {
       .animate-pulse {
         animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
       }
+      
+      .dot {
+        animation: dotPulse 1.4s infinite ease-in-out;
+      }
+      
+      .dot:nth-child(1) {
+        animation-delay: 0s;
+      }
+      
+      .dot:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      
+      .dot:nth-child(3) {
+        animation-delay: 0.4s;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -87,10 +114,11 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
   const [loading, setLoading] = useState(parentLoading);
   const [lastUpdate, setLastUpdate] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState(() => {
-    // Initial connection status
     return navigator.onLine ? 'online' : 'offline';
   });
   const [showSnakeGame, setShowSnakeGame] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [loadingMessage, setLoadingMessage] = useState('Loading categories');
   const intervalRef = useRef(null);
   const retryTimeoutRef = useRef(null);
   const connectionMonitorRef = useRef(null);
@@ -104,9 +132,30 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
     };
   }, []);
 
+  // Three dots animation effect
+  useEffect(() => {
+    if (loading) {
+      const messages = [
+        'Loading categories',
+        'Fetching data',
+        'Connecting to server',
+        'Almost there'
+      ];
+      let messageIndex = 0;
+      
+      const messageInterval = setInterval(() => {
+        if (isMountedRef.current && loading) {
+          messageIndex = (messageIndex + 1) % messages.length;
+          setLoadingMessage(messages[messageIndex]);
+        }
+      }, 3000);
+      
+      return () => clearInterval(messageInterval);
+    }
+  }, [loading]);
+
   // Check internet connectivity
   const checkInternetConnectivity = useCallback(async () => {
-    // First check browser's online status
     if (!navigator.onLine) {
       return false;
     }
@@ -115,11 +164,10 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3000);
       
-      // Try multiple endpoints for better reliability
       const endpoints = [
         'https://www.google.com/favicon.ico',
         'https://www.cloudflare.com/favicon.ico',
-        '/api/health' // Your backend health check if available
+        '/api/health'
       ];
       
       for (const endpoint of endpoints) {
@@ -151,7 +199,6 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
     setShowSnakeGame(false);
     setConnectionStatus('online');
     
-    // Small delay before refreshing
     setTimeout(async () => {
       if (isMountedRef.current) {
         await fetchCategories(true);
@@ -167,12 +214,10 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
     const isConnected = await checkInternetConnectivity();
     
     if (!isConnected && !showSnakeGame && connectionStatus === 'online') {
-      // Internet lost - show snake game
       console.log('🌐 Internet lost - showing snake game');
       setConnectionStatus('offline');
       setShowSnakeGame(true);
     } else if (isConnected && showSnakeGame) {
-      // Internet restored - close game
       console.log('✅ Internet restored - closing game');
       await handleConnectionRestored();
     } else if (isConnected && connectionStatus === 'offline') {
@@ -182,13 +227,10 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
 
   // Start connection monitoring
   useEffect(() => {
-    // Immediate check
     monitorConnection();
     
-    // Set up interval
     connectionMonitorRef.current = setInterval(monitorConnection, 3000);
     
-    // Also listen to browser events
     const handleOnline = () => {
       console.log('📡 Browser online event');
       monitorConnection();
@@ -223,7 +265,7 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
     }
     
     try {
-      const timeoutDuration = 15000; // Increased timeout for slow connections
+      const timeoutDuration = 15000;
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
       
@@ -248,7 +290,6 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
     } catch (error) {
       console.error('Error fetching categories:', error);
       
-      // Don't retry if offline
       if (connectionStatus === 'offline') {
         return false;
       }
@@ -281,15 +322,13 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
   // Auto-refresh when online
   useEffect(() => {
     if (connectionStatus === 'online') {
-      // Initial fetch
       fetchCategories(true);
       
-      // Set up auto-refresh
       intervalRef.current = setInterval(() => {
         if (connectionStatus === 'online' && isMountedRef.current) {
           fetchCategories(false);
         }
-      }, 30000); // Refresh every 30 seconds
+      }, 30000);
     }
     
     return () => {
@@ -318,20 +357,45 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
     return `Updated ${Math.floor(seconds / 3600)}h ago`;
   };
 
-  // Loading spinner component
-  const LoadingSpinner = () => (
-    <div className='text-center py-12 animate-fadeIn'>
-      <div className='flex flex-col items-center justify-center space-y-4'>
-        <div className='relative'>
-          <div className='w-16 h-16 border-4 border-gray-200 rounded-full animate-spin border-t-black'></div>
-          <div className='absolute inset-0 flex items-center justify-center'>
-            <div className='w-8 h-8 bg-black rounded-full animate-pulse'></div>
-          </div>
-        </div>
-        <p className='text-gray-500 text-sm font-medium'>Loading categories...</p>
+  // Three Dots Component
+  const ThreeDots = () => {
+    return (
+      <div className="flex items-center justify-center space-x-1">
+        <div className="w-2 h-2 bg-gray-600 rounded-full dot"></div>
+        <div className="w-2 h-2 bg-gray-600 rounded-full dot"></div>
+        <div className="w-2 h-2 bg-gray-600 rounded-full dot"></div>
       </div>
-    </div>
-  );
+    );
+  };
+
+  // Loading spinner component with three dots animation
+  const LoadingSpinner = () => {
+    return (
+      <div className='text-center py-12 animate-fadeIn'>
+        <div className='flex flex-col items-center justify-center space-y-4'>
+          <div className='relative'>
+            <div className='w-16 h-16 border-4 border-gray-200 rounded-full animate-spin border-t-black'></div>
+            <div className='absolute inset-0 flex items-center justify-center'>
+              <div className='w-8 h-8 bg-black rounded-full animate-pulse'></div>
+            </div>
+          </div>
+          
+          {/* Loading text with three dots animation */}
+          <div className='flex items-center justify-center space-x-1'>
+            <p className='text-gray-500 text-sm font-medium'>
+              {loadingMessage}
+            </p>
+            <ThreeDots />
+          </div>
+          
+          {/* Optional progress hint */}
+          <p className='text-xs text-gray-400'>
+            Please wait while we fetch the latest categories
+          </p>
+        </div>
+      </div>
+    );
+  };
 
   // Show snake game if offline
   if (showSnakeGame) {
