@@ -3,58 +3,178 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import api from '../services/api';
 import SnakeGame from './SnakeGame';
 
+// Move CSS to a separate file or add once globally
+const addGlobalStyles = () => {
+  if (!document.getElementById('category-selector-styles')) {
+    const style = document.createElement('style');
+    style.id = 'category-selector-styles';
+    style.textContent = `
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateX(-20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+      
+      @keyframes bounce {
+        0%, 100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-10px);
+        }
+      }
+      
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      
+      @keyframes pulse {
+        0%, 100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+      
+      .animate-fadeIn {
+        animation: fadeIn 0.5s ease-out;
+      }
+      
+      .animate-slideIn {
+        animation: slideIn 0.3s ease-out forwards;
+      }
+      
+      .animate-bounce {
+        animation: bounce 1s infinite;
+      }
+      
+      .animate-spin {
+        animation: spin 1s linear infinite;
+      }
+      
+      .animate-pulse {
+        animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+};
+
 const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading }) => {
   const [localCategories, setLocalCategories] = useState(categories);
   const [loading, setLoading] = useState(parentLoading);
   const [lastUpdate, setLastUpdate] = useState(null);
-  const [connectionStatus, setConnectionStatus] = useState('online');
+  const [connectionStatus, setConnectionStatus] = useState(() => {
+    // Initial connection status
+    return navigator.onLine ? 'online' : 'offline';
+  });
   const [showSnakeGame, setShowSnakeGame] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
   const intervalRef = useRef(null);
   const retryTimeoutRef = useRef(null);
   const connectionMonitorRef = useRef(null);
+  const isMountedRef = useRef(true);
+
+  // Add global styles once
+  useEffect(() => {
+    addGlobalStyles();
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Check internet connectivity
   const checkInternetConnectivity = useCallback(async () => {
+    // First check browser's online status
+    if (!navigator.onLine) {
+      return false;
+    }
+    
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3000);
       
-      await fetch('https://www.google.com/favicon.ico', {
-        mode: 'no-cors',
-        signal: controller.signal
-      });
+      // Try multiple endpoints for better reliability
+      const endpoints = [
+        'https://www.google.com/favicon.ico',
+        'https://www.cloudflare.com/favicon.ico',
+        '/api/health' // Your backend health check if available
+      ];
+      
+      for (const endpoint of endpoints) {
+        try {
+          await fetch(endpoint, {
+            mode: 'no-cors',
+            signal: controller.signal,
+            cache: 'no-store'
+          });
+          clearTimeout(timeoutId);
+          return true;
+        } catch (e) {
+          continue;
+        }
+      }
       
       clearTimeout(timeoutId);
-      return true;
+      return false;
     } catch (error) {
+      console.log('Connectivity check failed:', error.message);
       return false;
     }
   }, []);
 
   // Handle connection restoration
   const handleConnectionRestored = useCallback(async () => {
+    if (!isMountedRef.current) return;
+    
     setShowSnakeGame(false);
     setConnectionStatus('online');
     
-    // Refresh categories when connection is back
-    await fetchCategories(true);
-    
-    // Optional: Show success message
-    console.log('Internet connection restored!');
+    // Small delay before refreshing
+    setTimeout(async () => {
+      if (isMountedRef.current) {
+        await fetchCategories(true);
+        console.log('Internet connection restored and data refreshed!');
+      }
+    }, 500);
   }, []);
 
   // Monitor connection status
   const monitorConnection = useCallback(async () => {
+    if (!isMountedRef.current) return;
+    
     const isConnected = await checkInternetConnectivity();
     
     if (!isConnected && !showSnakeGame && connectionStatus === 'online') {
       // Internet lost - show snake game
+      console.log('🌐 Internet lost - showing snake game');
       setConnectionStatus('offline');
       setShowSnakeGame(true);
     } else if (isConnected && showSnakeGame) {
       // Internet restored - close game
-      handleConnectionRestored();
+      console.log('✅ Internet restored - closing game');
+      await handleConnectionRestored();
     } else if (isConnected && connectionStatus === 'offline') {
       setConnectionStatus('online');
     }
@@ -62,25 +182,48 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
 
   // Start connection monitoring
   useEffect(() => {
-    connectionMonitorRef.current = setInterval(monitorConnection, 2000);
+    // Immediate check
+    monitorConnection();
+    
+    // Set up interval
+    connectionMonitorRef.current = setInterval(monitorConnection, 3000);
+    
+    // Also listen to browser events
+    const handleOnline = () => {
+      console.log('📡 Browser online event');
+      monitorConnection();
+    };
+    
+    const handleOffline = () => {
+      console.log('📡 Browser offline event');
+      monitorConnection();
+    };
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
     
     return () => {
       if (connectionMonitorRef.current) {
         clearInterval(connectionMonitorRef.current);
       }
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, [monitorConnection]);
 
   // Fetch categories
-  const fetchCategories = async (showLoading = false, retryAttempt = 0) => {
+  const fetchCategories = useCallback(async (showLoading = false, retryAttempt = 0) => {
     if (connectionStatus === 'offline') {
+      console.log('Skipping fetch - offline');
       return false;
     }
     
-    if (showLoading) setLoading(true);
+    if (showLoading && isMountedRef.current) {
+      setLoading(true);
+    }
     
     try {
-      const timeoutDuration = 10000;
+      const timeoutDuration = 15000; // Increased timeout for slow connections
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
       
@@ -95,23 +238,33 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
         ? response.data 
         : response.data?.data || [];
       
-      setLocalCategories(categoriesData);
-      setLastUpdate(new Date());
-      setRetryCount(0);
+      if (isMountedRef.current) {
+        setLocalCategories(categoriesData);
+        setLastUpdate(new Date());
+        setRetryCount(0);
+      }
       
       return true;
     } catch (error) {
       console.error('Error fetching categories:', error);
       
-      if (retryAttempt < 3 && connectionStatus !== 'offline') {
+      // Don't retry if offline
+      if (connectionStatus === 'offline') {
+        return false;
+      }
+      
+      if (retryAttempt < 3) {
         const delay = Math.pow(2, retryAttempt) * 1000;
+        console.log(`Retrying fetch (${retryAttempt + 1}/3) in ${delay}ms...`);
         
         if (retryTimeoutRef.current) {
           clearTimeout(retryTimeoutRef.current);
         }
         
         retryTimeoutRef.current = setTimeout(() => {
-          fetchCategories(showLoading, retryAttempt + 1);
+          if (isMountedRef.current) {
+            fetchCategories(showLoading, retryAttempt + 1);
+          }
         }, delay);
         
         return false;
@@ -119,20 +272,24 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
       
       return false;
     } finally {
-      if (showLoading) setLoading(false);
+      if (showLoading && isMountedRef.current) {
+        setLoading(false);
+      }
     }
-  };
+  }, [connectionStatus]);
 
   // Auto-refresh when online
   useEffect(() => {
     if (connectionStatus === 'online') {
+      // Initial fetch
       fetchCategories(true);
       
+      // Set up auto-refresh
       intervalRef.current = setInterval(() => {
-        if (connectionStatus === 'online') {
+        if (connectionStatus === 'online' && isMountedRef.current) {
           fetchCategories(false);
         }
-      }, 30000);
+      }, 30000); // Refresh every 30 seconds
     }
     
     return () => {
@@ -143,11 +300,13 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
         clearTimeout(retryTimeoutRef.current);
       }
     };
-  }, [connectionStatus]);
+  }, [connectionStatus, fetchCategories]);
 
   // Update local categories when props change
   useEffect(() => {
-    setLocalCategories(categories);
+    if (categories && categories.length > 0) {
+      setLocalCategories(categories);
+    }
   }, [categories]);
 
   // Get last update text
@@ -217,26 +376,33 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
         )}
         
         {/* Connection status indicator */}
-        {connectionStatus === 'online' && (
-          <div className='flex items-center space-x-1 text-green-600 text-xs bg-green-50 px-2 py-1 rounded-full'>
-            <svg className='w-3 h-3' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-              <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
+        <div className='flex items-center space-x-2'>
+          {connectionStatus === 'online' && (
+            <div className='flex items-center space-x-1 text-green-600 text-xs bg-green-50 px-2 py-1 rounded-full'>
+              <div className='w-2 h-2 bg-green-500 rounded-full animate-pulse'></div>
+              <span>Connected</span>
+            </div>
+          )}
+          
+          {connectionStatus === 'offline' && (
+            <div className='flex items-center space-x-1 text-red-600 text-xs bg-red-50 px-2 py-1 rounded-full'>
+              <div className='w-2 h-2 bg-red-500 rounded-full animate-pulse'></div>
+              <span>Offline</span>
+            </div>
+          )}
+          
+          {/* Refresh button */}
+          <button
+            onClick={() => fetchCategories(true)}
+            disabled={loading || connectionStatus === 'offline'}
+            className='text-xs text-gray-400 hover:text-gray-600 transition flex items-center space-x-1 disabled:opacity-50'
+          >
+            <svg className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+              <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' />
             </svg>
-            <span>Connected</span>
-          </div>
-        )}
-        
-        {/* Refresh button */}
-        <button
-          onClick={() => fetchCategories(true)}
-          disabled={loading}
-          className='text-xs text-gray-400 hover:text-gray-600 transition flex items-center space-x-1 disabled:opacity-50'
-        >
-          <svg className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' />
-          </svg>
-          <span>Refresh</span>
-        </button>
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
       
       <h2 className='text-2xl font-semibold text-black mb-6 text-center'>
@@ -248,9 +414,9 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
           <button
             key={category._id || category.id || index}
             onClick={() => onSelectCategory(category)}
-            className='group p-6 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:shadow-lg transition-all text-left hover:scale-105 transform duration-200'
+            className='group p-6 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:shadow-lg transition-all text-left hover:scale-105 transform duration-200 animate-slideIn'
             style={{ 
-              animation: `slideIn 0.3s ease-out ${index * 50}ms forwards`,
+              animationDelay: `${index * 50}ms`,
               opacity: 0 
             }}
           >
@@ -276,50 +442,5 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
     </div>
   );
 };
-
-// Add CSS animations
-const style = document.createElement('style');
-style.textContent = `
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  
-  @keyframes slideIn {
-    from {
-      opacity: 0;
-      transform: translateX(-20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
-  }
-  
-  @keyframes bounce {
-    0%, 100% {
-      transform: translateY(0);
-    }
-    50% {
-      transform: translateY(-10px);
-    }
-  }
-  
-  .animate-fadeIn {
-    animation: fadeIn 0.5s ease-out;
-  }
-  
-  .animate-bounce {
-    animation: bounce 1s infinite;
-  }
-`;
-
-document.head.appendChild(style);
 
 export default CategorySelector;
