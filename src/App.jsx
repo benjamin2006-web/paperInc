@@ -4,6 +4,7 @@ import AdminLayout from './components/AdminLayout';
 import LoadingSpinner from './components/LoadingSpinner';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
+const CategoriesPage = lazy(() => import('./pages/CategoriesPage')); // Add this
 const AdminLogin = lazy(() => import('./pages/AdminLogin'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const ManageTrades = lazy(() => import('./pages/ManageTrades'));
@@ -13,7 +14,7 @@ const ManageAnnouncements = lazy(() => import('./pages/ManageAnnouncements'));
 const ManageUsers = lazy(() => import('./pages/ManageUsers'));
 const Register = lazy(() => import('./pages/Register'));
 const Login = lazy(() => import('./pages/Login'));
-const UserProfile = lazy(() => import('./pages/UserProfile')); // Add this import
+const UserProfile = lazy(() => import('./pages/UserProfile'));
 
 function App() {
   return (
@@ -22,10 +23,11 @@ function App() {
         <Routes>
           {/* Public Routes */}
           <Route path='/' element={<HomePage />} />
+          <Route path='/categories' element={<CategoriesPage />} /> {/* Add this */}
           <Route path='/register' element={<Register />} />
           <Route path='/login' element={<Login />} />
-          <Route path='/profile' element={<UserProfile />} />{' '}
-          {/* Add profile route */}
+          <Route path='/profile' element={<UserProfile />} />
+          
           {/* Admin Routes */}
           <Route path='/admin/login' element={<AdminLogin />} />
           <Route path='/admin' element={<AdminLayout />}>
@@ -33,12 +35,10 @@ function App() {
             <Route path='manage-trades' element={<ManageTrades />} />
             <Route path='manage-categories' element={<ManageCategories />} />
             <Route path='manage-exams' element={<ManageExams />} />
-            <Route
-              path='manage-announcements'
-              element={<ManageAnnouncements />}
-            />
+            <Route path='manage-announcements' element={<ManageAnnouncements />} />
             <Route path='manage-users' element={<ManageUsers />} />
           </Route>
+          
           <Route path='*' element={<Navigate to='/' replace />} />
         </Routes>
       </Suspense>
