@@ -28,6 +28,7 @@ const HomePage = () => {
   const [hasShownCarousel, setHasShownCarousel] = useState(false);
   const [carouselCancelled, setCarouselCancelled] = useState(false);
   const [isVIP, setIsVIP] = useState(false);
+  const [categoriesLoading, setCategoriesLoading] = useState(true); // Add loading state for categories
   const query = searchParams.get('search');
 
   // Refs to prevent infinite loops
@@ -70,6 +71,7 @@ const HomePage = () => {
 
     const loadDataOnce = async () => {
       setLoading(true);
+      setCategoriesLoading(true); // Set categories loading to true
       try {
         const [categoriesRes, tradesRes, papersRes] = await Promise.all([
           api.get('/categories'),
@@ -91,7 +93,10 @@ const HomePage = () => {
       } catch (error) {
         console.error('Error loading data:', error);
       } finally {
-        if (isMounted.current) setLoading(false);
+        if (isMounted.current) {
+          setLoading(false);
+          setCategoriesLoading(false); // Set categories loading to false
+        }
       }
     };
 
@@ -341,6 +346,7 @@ const HomePage = () => {
               <CategorySelector
                 categories={categories}
                 onSelectCategory={handleCategorySelect}
+                loading={categoriesLoading} // Pass loading state
               />
             )}
 
