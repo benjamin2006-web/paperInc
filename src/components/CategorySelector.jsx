@@ -5,11 +5,13 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
   const [localCategories, setLocalCategories] = useState(categories);
   const [loading, setLoading] = useState(parentLoading);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [error, setError] = useState(null);
   const intervalRef = useRef(null);
 
-  // Fetch categories function
+  // Fetch categories from API
   const fetchCategories = async (showLoading = false) => {
     if (showLoading) setLoading(true);
+    setError(null);
     
     try {
       const response = await api.get('/categories');
@@ -21,23 +23,22 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
       setLastUpdate(new Date());
     } catch (error) {
       console.error('Error fetching categories:', error);
+      setError(error.response?.status === 404 
+        ? 'Categories endpoint not found. Please check backend API.' 
+        : 'Failed to load categories. Please try again later.');
     } finally {
       if (showLoading) setLoading(false);
     }
   };
 
-  // Auto-refresh every 30 seconds (user won't notice)
+  // Initial fetch and auto-refresh
   useEffect(() => {
-    // Initial fetch
     fetchCategories(true);
     
-    // Set up interval for background refresh
     intervalRef.current = setInterval(() => {
-      // Refresh in background - no loading indicator
       fetchCategories(false);
-    }, 30000); // 30 seconds
+    }, 30000);
     
-    // Cleanup on unmount
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -47,10 +48,11 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
 
   // Update when parent categories change
   useEffect(() => {
-    setLocalCategories(categories);
+    if (categories && categories.length > 0) {
+      setLocalCategories(categories);
+    }
   }, [categories]);
 
-  // Optional: Show last update time (user can see but not intrusive)
   const getLastUpdateText = () => {
     if (!lastUpdate) return '';
     const seconds = Math.floor((new Date() - lastUpdate) / 1000);
@@ -59,7 +61,7 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
     return `Updated ${Math.floor(seconds / 3600)}h ago`;
   };
 
-  // Loading spinner (smooth, no flash)
+  // Loading spinner
   const LoadingSpinner = () => {
     const [dots, setDots] = useState('');
 
@@ -82,29 +84,53 @@ const CategorySelector = ({ categories, onSelectCategory, loading: parentLoading
     );
   };
 
+  // Error state
+  if (error && localCategories.length === 0) {
+    return (
+      <div className='text-center py-12'>
+        <div className='inline-flex items-center justify-center w-16 h-16 bg-red-50 rounded-full mb-4'>
+          <svg className='w-8 h-8 text-red-500' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' />
+          </svg>
+        </div>
+        <p className='text-red-600 font-medium'>{error}</p>
+        <button
+          onClick={() => fetchCategories(true)}
+          className='mt-4 px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-all'
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  // Loading state
   if (loading && localCategories.length === 0) {
     return <LoadingSpinner />;
   }
 
+  // Empty state
   if (!loading && localCategories.length === 0) {
     return (
-      <div className='text-center py-12 animate-fadeIn'>
+      <div className='text-center py-12'>
         <div className='inline-flex items-center justify-center w-16 h-16 bg-gray-50 rounded-full mb-4'>
           <svg className='w-8 h-8 text-gray-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
             <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' />
           </svg>
         </div>
         <p className='text-gray-500'>No categories available</p>
-        <p className='text-gray-400 text-sm mt-2'>
-          Please contact administrator on 0792098874
-        </p>
+        <button
+          onClick={() => fetchCategories(true)}
+          className='mt-4 px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-all'
+        >
+          Refresh
+        </button>
       </div>
     );
   }
 
   return (
-    <div className='animate-fadeIn'>
-      {/* Optional: Subtle last update indicator - user might not notice */}
+    <div>
       {lastUpdate && (
         <div className='text-right text-xs text-gray-400 mb-2'>
           {getLastUpdateText()}
