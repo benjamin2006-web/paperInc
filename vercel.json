@@ -6,10 +6,6 @@
   "devCommand": "npm run dev",
   "rewrites": [
     {
-      "source": "/api/health",
-      "destination": "https://paperincbackend.onrender.com/api/health"
-    },
-    {
       "source": "/api/(.*)",
       "destination": "https://paperincbackend.onrender.com/api/$1"
     },
@@ -37,10 +33,6 @@
         {
           "key": "Access-Control-Allow-Headers",
           "value": "Content-Type, Authorization"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "no-cache, no-store, must-revalidate"
         }
       ]
     },
@@ -58,10 +50,6 @@
         {
           "key": "X-XSS-Protection",
           "value": "1; mode=block"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "no-cache, no-store, must-revalidate"
         }
       ]
     },
@@ -73,20 +61,6 @@
           "value": "public, max-age=31536000, immutable"
         }
       ]
-    },
-    {
-      "source": "/logo.png",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=86400"
-        }
-      ]
     }
-  ],
-  "functions": {
-    "api/*": {
-      "maxDuration": 10
-    }
-  }
+  ]
 }
