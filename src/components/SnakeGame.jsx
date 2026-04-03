@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const SnakeGame = ({ onConnectionRestored, onClose }) => {
+const SnakeGame = ({ onConnectionRestored }) => {
   const [snake, setSnake] = useState([[10, 10]]);
   const [food, setFood] = useState([15, 15]);
   const [direction, setDirection] = useState('RIGHT');
@@ -14,27 +14,14 @@ const SnakeGame = ({ onConnectionRestored, onClose }) => {
 
   const GRID_SIZE = 20;
   const CELL_SIZE = 20;
-
   const bookIcons = ['📚', '📖', '📘', '📙', '📗', '📕', '📓', '📒'];
 
-  const getRandomBookIcon = () => {
-    return bookIcons[Math.floor(Math.random() * bookIcons.length)];
-  };
+  const getRandomBookIcon = () => bookIcons[Math.floor(Math.random() * bookIcons.length)];
 
   const generateRandomFood = useCallback(() => {
-    const newFood = [
-      Math.floor(Math.random() * GRID_SIZE),
-      Math.floor(Math.random() * GRID_SIZE),
-    ];
-
-    const isOnSnake = snake.some(
-      (segment) => segment[0] === newFood[0] && segment[1] === newFood[1],
-    );
-
-    if (isOnSnake) {
-      return generateRandomFood();
-    }
-
+    const newFood = [Math.floor(Math.random() * GRID_SIZE), Math.floor(Math.random() * GRID_SIZE)];
+    const isOnSnake = snake.some(segment => segment[0] === newFood[0] && segment[1] === newFood[1]);
+    if (isOnSnake) return generateRandomFood();
     setCurrentBookIcon(getRandomBookIcon());
     return newFood;
   }, [snake]);
@@ -48,33 +35,16 @@ const SnakeGame = ({ onConnectionRestored, onClose }) => {
       let newHead;
 
       switch (direction) {
-        case 'RIGHT':
-          newHead = [head[0] + 1, head[1]];
-          break;
-        case 'LEFT':
-          newHead = [head[0] - 1, head[1]];
-          break;
-        case 'UP':
-          newHead = [head[0], head[1] - 1];
-          break;
-        case 'DOWN':
-          newHead = [head[0], head[1] + 1];
-          break;
-        default:
-          return prevSnake;
+        case 'RIGHT': newHead = [head[0] + 1, head[1]]; break;
+        case 'LEFT': newHead = [head[0] - 1, head[1]]; break;
+        case 'UP': newHead = [head[0], head[1] - 1]; break;
+        case 'DOWN': newHead = [head[0], head[1] + 1]; break;
+        default: return prevSnake;
       }
 
-      if (
-        newHead[0] < 0 ||
-        newHead[0] >= GRID_SIZE ||
-        newHead[1] < 0 ||
-        newHead[1] >= GRID_SIZE
-      ) {
+      if (newHead[0] < 0 || newHead[0] >= GRID_SIZE || newHead[1] < 0 || newHead[1] >= GRID_SIZE) {
         setGameOver(true);
-        if (gameLoopRef.current) {
-          clearInterval(gameLoopRef.current);
-          gameLoopRef.current = null;
-        }
+        if (gameLoopRef.current) clearInterval(gameLoopRef.current);
         return prevSnake;
       }
 
@@ -86,36 +56,24 @@ const SnakeGame = ({ onConnectionRestored, onClose }) => {
         const newBooksEaten = booksEaten + 1;
         setScore(newScore);
         setBooksEaten(newBooksEaten);
-
-        if (newScore > highScore) {
-          setHighScore(newScore);
-        }
-
+        if (newScore > highScore) setHighScore(newScore);
         if (newBooksEaten % 5 === 0 && gameSpeed > 80) {
           const newSpeed = gameSpeed - 10;
           setGameSpeed(newSpeed);
-
           if (gameLoopRef.current) {
             clearInterval(gameLoopRef.current);
             gameLoopRef.current = setInterval(moveSnake, newSpeed);
           }
         }
-
         setFood(generateRandomFood());
         return newSnake;
       } else {
-        const collision = newSnake.some(
-          (segment) => segment[0] === newHead[0] && segment[1] === newHead[1],
-        );
+        const collision = newSnake.some(segment => segment[0] === newHead[0] && segment[1] === newHead[1]);
         if (collision) {
           setGameOver(true);
-          if (gameLoopRef.current) {
-            clearInterval(gameLoopRef.current);
-            gameLoopRef.current = null;
-          }
+          if (gameLoopRef.current) clearInterval(gameLoopRef.current);
           return prevSnake;
         }
-
         newSnake.push(newHead);
         newSnake.shift();
         return newSnake;
@@ -124,9 +82,7 @@ const SnakeGame = ({ onConnectionRestored, onClose }) => {
   }, [direction, food, score, booksEaten, highScore, gameSpeed, gameOver, generateRandomFood]);
 
   const startGame = useCallback(() => {
-    if (gameLoopRef.current) {
-      clearInterval(gameLoopRef.current);
-    }
+    if (gameLoopRef.current) clearInterval(gameLoopRef.current);
     gameLoopRef.current = setInterval(moveSnake, gameSpeed);
   }, [moveSnake, gameSpeed]);
 
@@ -158,28 +114,20 @@ const SnakeGame = ({ onConnectionRestored, onClose }) => {
         }
         return;
       }
-
       const key = e.key;
       const newDirection = {
-        ArrowUp: 'UP',
-        ArrowDown: 'DOWN',
-        ArrowLeft: 'LEFT',
-        ArrowRight: 'RIGHT',
+        ArrowUp: 'UP', ArrowDown: 'DOWN', ArrowLeft: 'LEFT', ArrowRight: 'RIGHT'
       }[key];
-
       if (newDirection) {
         e.preventDefault();
-        if (
-          (newDirection === 'UP' && direction !== 'DOWN') ||
-          (newDirection === 'DOWN' && direction !== 'UP') ||
-          (newDirection === 'LEFT' && direction !== 'RIGHT') ||
-          (newDirection === 'RIGHT' && direction !== 'LEFT')
-        ) {
+        if ((newDirection === 'UP' && direction !== 'DOWN') ||
+            (newDirection === 'DOWN' && direction !== 'UP') ||
+            (newDirection === 'LEFT' && direction !== 'RIGHT') ||
+            (newDirection === 'RIGHT' && direction !== 'LEFT')) {
           setDirection(newDirection);
         }
       }
     };
-
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [gameOver, direction, resetGame]);
@@ -220,7 +168,6 @@ const SnakeGame = ({ onConnectionRestored, onClose }) => {
     snake.forEach((segment, index) => {
       const [x, y] = segment;
       const isHead = index === snake.length - 1;
-
       if (isHead) {
         ctx.fillStyle = '#0f3460';
         ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1);
@@ -240,10 +187,7 @@ const SnakeGame = ({ onConnectionRestored, onClose }) => {
           ctx.fillRect(x * CELL_SIZE + CELL_SIZE - 8, y * CELL_SIZE + CELL_SIZE - 6, eyeSize, eyeSize);
         }
       } else {
-        const gradient = ctx.createLinearGradient(
-          x * CELL_SIZE, y * CELL_SIZE,
-          x * CELL_SIZE + CELL_SIZE, y * CELL_SIZE + CELL_SIZE
-        );
+        const gradient = ctx.createLinearGradient(x * CELL_SIZE, y * CELL_SIZE, x * CELL_SIZE + CELL_SIZE, y * CELL_SIZE + CELL_SIZE);
         gradient.addColorStop(0, '#533483');
         gradient.addColorStop(1, '#3b2e5e');
         ctx.fillStyle = gradient;
@@ -314,5 +258,4 @@ const SnakeGame = ({ onConnectionRestored, onClose }) => {
   );
 };
 
-// ✅ IMPORTANT: This export MUST be here
 export default SnakeGame;
