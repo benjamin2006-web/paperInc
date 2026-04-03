@@ -4,7 +4,7 @@ import AdminLayout from './components/AdminLayout';
 import LoadingSpinner from './components/LoadingSpinner';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
- //const CategoriesPage = lazy(() => import('./pages/CategoriesPage')); 
+// Remove this line: const CategoriesPage = lazy(() => import('./pages/CategoriesPage'));
 const AdminLogin = lazy(() => import('./pages/AdminLogin'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const ManageTrades = lazy(() => import('./pages/ManageTrades'));
@@ -23,7 +23,7 @@ function App() {
         <Routes>
           {/* Public Routes */}
           <Route path='/' element={<HomePage />} />
-          {/* <Route path='/categories' element={<CategoriesPage />} /> Remove this line */}
+          {/* Remove this line: <Route path='/categories' element={<CategoriesPage />} /> */}
           <Route path='/register' element={<Register />} />
           <Route path='/login' element={<Login />} />
           <Route path='/profile' element={<UserProfile />} />
