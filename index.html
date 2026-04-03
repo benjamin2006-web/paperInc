@@ -6,75 +6,13 @@
     <meta name="description" content="Access past exam papers easily. Filter by category, trade, and year." />
     <meta name="theme-color" content="#000000" />
     
-    <!-- Preconnect to external resources for faster loading -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preconnect" href="https://paperincbackend.onrender.com" />
-    
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/logo.png" />
     
     <!-- Title -->
     <title>Exam Papers Platform - Past Papers Made Easy</title>
     
-    <!-- Preload critical assets -->
-    <link rel="preload" as="image" href="/logo.png" />
-    
-    <!-- Network Information API for slow connection detection -->
-    <script>
-      // Detect slow connection and add class to body
-      if ('connection' in navigator) {
-        const connection = navigator.connection;
-        if (connection.effectiveType === '2g' || connection.effectiveType === 'slow-2g') {
-          document.documentElement.classList.add('slow-connection');
-        }
-        // Listen for connection changes
-        connection.addEventListener('change', () => {
-          if (connection.effectiveType === '2g' || connection.effectiveType === 'slow-2g') {
-            document.documentElement.classList.add('slow-connection');
-          } else {
-            document.documentElement.classList.remove('slow-connection');
-          }
-        });
-      }
-      
-      // Check API health on load
-      window.addEventListener('load', async () => {
-        try {
-          const response = await fetch('https://paperincbackend.onrender.com/api/health');
-          if (response.ok) {
-            console.log('✅ Backend API is healthy');
-          } else {
-            console.log('⚠️ Backend API returned:', response.status);
-          }
-        } catch (error) {
-          console.log('⚠️ Backend API may be down:', error.message);
-        }
-      });
-      
-      // Service Worker for offline support (optional)
-      if ('serviceWorker' in navigator && navigator.onLine) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(err => {
-            console.log('ServiceWorker registration failed: ', err);
-          });
-        });
-      }
-      
-      // Cache page for offline viewing
-      window.addEventListener('load', () => {
-        if ('caches' in window) {
-          caches.open('paperinc-v1').then(cache => {
-            cache.add('/');
-            cache.add('/index.html');
-            cache.add('/logo.png');
-          });
-        }
-      });
-    </script>
-    
     <style>
-      /* Critical CSS for faster initial render */
       * {
         margin: 0;
         padding: 0;
@@ -114,52 +52,15 @@
         to { transform: rotate(360deg); }
       }
       
-      /* Hide initial loading after React mounts */
       .initial-loading.hide {
         opacity: 0;
         visibility: hidden;
         transition: opacity 0.3s ease;
       }
-      
-      /* Slow connection optimizations */
-      .slow-connection img {
-        filter: blur(0) !important;
-      }
-      
-      .slow-connection .animate-all {
-        animation: none !important;
-      }
-      
-      /* Error message styling */
-      .api-error-toast {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: #ef4444;
-        color: white;
-        padding: 12px 20px;
-        border-radius: 8px;
-        font-size: 14px;
-        z-index: 10000;
-        animation: slideIn 0.3s ease-out;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-      }
-      
-      @keyframes slideIn {
-        from {
-          transform: translateX(100%);
-          opacity: 0;
-        }
-        to {
-          transform: translateX(0);
-          opacity: 1;
-        }
-      }
     </style>
   </head>
   <body>
     <div id="root">
-      <!-- Initial loading indicator -->
       <div class="initial-loading" id="initial-loading">
         <div class="spinner"></div>
       </div>
@@ -178,76 +79,6 @@
               loadingEl.style.display = 'none';
             }, 300);
           }, 500);
-        }
-      });
-      
-      // Network status monitoring for snake game
-      let wasOffline = false;
-      
-      function updateNetworkStatus() {
-        const isOnline = navigator.onLine;
-        if (!isOnline && !wasOffline) {
-          console.log('🌐 Network lost');
-          wasOffline = true;
-          window.dispatchEvent(new CustomEvent('connection-lost'));
-        } else if (isOnline && wasOffline) {
-          console.log('✅ Network restored');
-          wasOffline = false;
-          window.dispatchEvent(new CustomEvent('connection-restored'));
-        }
-      }
-      
-      window.addEventListener('online', updateNetworkStatus);
-      window.addEventListener('offline', updateNetworkStatus);
-      updateNetworkStatus();
-      
-      // Monitor slow connections
-      if ('connection' in navigator) {
-        const connection = navigator.connection;
-        connection.addEventListener('change', () => {
-          window.dispatchEvent(new CustomEvent('connection-change', {
-            detail: { 
-              type: connection.effectiveType,
-              slow: connection.effectiveType === '2g' || connection.effectiveType === 'slow-2g'
-            }
-          }));
-        });
-      }
-      
-      // Show API error toast if backend is down
-      window.addEventListener('load', async () => {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000);
-          const response = await fetch('https://paperincbackend.onrender.com/api/health', {
-            signal: controller.signal
-          });
-          clearTimeout(timeoutId);
-          
-          if (!response.ok) {
-            showApiErrorToast();
-          }
-        } catch (error) {
-          console.log('Backend health check failed:', error.message);
-          showApiErrorToast();
-        }
-      });
-      
-      function showApiErrorToast() {
-        const toast = document.createElement('div');
-        toast.className = 'api-error-toast';
-        toast.innerHTML = `
-          <strong>⚠️ Backend Connection Issue</strong><br>
-          <small>Using cached data. Some features may be limited.</small>
-        `;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 8000);
-      }
-      
-      // Prevent pinch zoom on PDF viewer (optional)
-      document.addEventListener('gesturestart', function(e) {
-        if (e.target.closest('.pdf-viewer')) {
-          e.preventDefault();
         }
       });
     </script>
