@@ -6,6 +6,10 @@
   "devCommand": "npm run dev",
   "rewrites": [
     {
+      "source": "/api/health",
+      "destination": "https://paperincbackend.onrender.com/api/health"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "https://paperincbackend.onrender.com/api/$1"
     },
@@ -20,6 +24,23 @@
   ],
   "headers": [
     {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization"
+        }
+      ]
+    },
+    {
       "source": "/(.*)",
       "headers": [
         {
@@ -33,10 +54,6 @@
         {
           "key": "X-XSS-Protection",
           "value": "1; mode=block"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "no-cache, no-store, must-revalidate"
         }
       ]
     },
@@ -49,9 +66,5 @@
         }
       ]
     }
-  ],
-  "env": {
-    "VITE_API_URL": "https://paperincbackend.onrender.com/api",
-    "VITE_APP_NAME": "Exam Papers Platform"
-  }
+  ]
 }
