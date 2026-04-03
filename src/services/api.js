@@ -1,40 +1,56 @@
+// services/api.js
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://paperincbackend.onrender.com';
+// Detect if running on Vercel (production) or local
+const isVercel = import.meta.env.PROD && window.location.hostname.includes('vercel.app');
+const API_URL = import.meta.env.VITE_API_URL || (isVercel ? '/api' : 'https://paperincbackend.onrender.com');
 
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 60000, // Increased timeout for large data
+  timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
+// Connection status event dispatcher
+const dispatchConnectionEvent = (status) => {
+  const event = new CustomEvent('connection-status-change', { 
+    detail: { status, timestamp: Date.now() }
+  });
+  window.dispatchEvent(event);
+  console.log(`📡 Connection event: ${status}`);
+};
+
 // Log API configuration on startup
 console.log('🔧 API Configuration:', {
   baseURL: API_URL,
   environment: import.meta.env.MODE,
+  isVercel: isVercel,
   timestamp: new Date().toISOString(),
 });
 
 // Request interceptor
 api.interceptors.request.use(
   (config) => {
-    // Add /api prefix for all requests except health check
-    if (!config.url.startsWith('/health') && 
-        !config.url.startsWith('/api/') && 
-        !config.url.startsWith('http')) {
+    // Skip URL rewriting for absolute URLs or health checks
+    if (config.url.startsWith('http') || config.url.startsWith('/health')) {
+      return config;
+    }
+    
+    // Don't add /api prefix if already there or if using Vercel proxy
+    if (!config.url.startsWith('/api/') && !isVercel) {
       config.url = `/api${config.url}`;
       console.log(`🔄 Rewriting URL to: ${config.url}`);
     }
     
-    // ✅ Get ALL papers - use very high limit (10000)
+    // Get ALL papers - use high limit
     if (config.url.includes('/papers') && 
         !config.url.includes('limit=') && 
         config.method === 'get') {
       const separator = config.url.includes('?') ? '&' : '?';
       config.url = `${config.url}${separator}limit=10000&page=1`;
-      console.log(`📚 Papers request (all papers): ${config.url}`);
+      console.log(`📚 Papers request: ${config.url}`);
     }
     
     // Prevent empty URL calls
@@ -43,25 +59,18 @@ api.interceptors.request.use(
       return Promise.reject(new Error('Invalid API endpoint - URL is empty'));
     }
 
-    // Log all API requests
-    console.log(`📡 API Request: ${config.method.toUpperCase()} ${config.url}`);
-    console.log(`📡 Full URL: ${config.baseURL}${config.url}`);
+    // Log API requests (only in development to reduce noise)
+    if (import.meta.env.DEV) {
+      console.log(`📡 API Request: ${config.method.toUpperCase()} ${config.url}`);
+    }
 
-    // Check for user token first, then admin token
+    // Add authentication token
     const userToken = localStorage.getItem('userToken');
     const adminToken = localStorage.getItem('adminToken');
     const token = userToken || adminToken;
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      console.log(`🔐 Auth token present: ${token.substring(0, 20)}...`);
-    } else {
-      console.log('🔓 No auth token found');
-    }
-
-    // Log request data for POST/PUT requests
-    if (config.data && (config.method === 'post' || config.method === 'put')) {
-      console.log('📦 Request data:', config.data);
     }
 
     return config;
@@ -72,12 +81,12 @@ api.interceptors.request.use(
   },
 );
 
-// Response interceptor for error handling and logging
+// Response interceptor with connection monitoring
 api.interceptors.response.use(
   (response) => {
-    console.log(
-      `✅ API Response: ${response.status} ${response.config.method.toUpperCase()} ${response.config.url}`,
-    );
+    if (import.meta.env.DEV) {
+      console.log(`✅ API Response: ${response.status} ${response.config.method.toUpperCase()} ${response.config.url}`);
+    }
     return response;
   },
   (error) => {
@@ -86,8 +95,20 @@ api.interceptors.response.use(
       status: error.response?.status,
       url: error.config?.url,
       method: error.config?.method,
-      data: error.response?.data,
     });
+
+    // Handle connection/network errors
+    if (error.message === 'Network Error' || error.code === 'ECONNABORTED') {
+      console.error('🌐 Network Error - Backend might be down or slow');
+      
+      // Check if actually offline
+      if (!navigator.onLine) {
+        dispatchConnectionEvent('offline');
+      } else {
+        // Could be CORS or backend issue
+        dispatchConnectionEvent('slow');
+      }
+    }
 
     // Handle 401 Unauthorized
     if (error.response?.status === 401) {
@@ -123,42 +144,85 @@ api.interceptors.response.use(
       console.error(`❌ 404 Not Found: ${error.config?.url}`);
     }
 
-    // Handle network errors
-    if (error.message === 'Network Error') {
-      console.error('🌐 Network Error - Backend might not be running');
-    }
-
     return Promise.reject(error);
   },
 );
 
-// Add a method to test the API connection
+// Test API connection
 api.testConnection = async () => {
   try {
+    // Try health endpoint first
     const response = await api.get('/health');
     console.log('✅ API connection test successful:', response.data);
+    dispatchConnectionEvent('online');
     return true;
   } catch (error) {
     console.error('❌ API connection test failed:', error.message);
+    
+    // Try alternative endpoint
+    try {
+      const response = await api.get('/categories?limit=1');
+      if (response.data) {
+        console.log('✅ API connection test successful (via categories)');
+        dispatchConnectionEvent('online');
+        return true;
+      }
+    } catch (e) {
+      console.error('❌ Alternative test also failed');
+      dispatchConnectionEvent('offline');
+    }
+    
     return false;
   }
 };
 
-// Add a method to check if user is authenticated
+// Monitor connection status
+let connectionMonitorInterval = null;
+
+api.startConnectionMonitoring = (callback, interval = 10000) => {
+  if (connectionMonitorInterval) {
+    clearInterval(connectionMonitorInterval);
+  }
+  
+  // Initial check
+  api.testConnection();
+  
+  // Periodic checks
+  connectionMonitorInterval = setInterval(async () => {
+    const isConnected = await api.testConnection();
+    if (callback) {
+      callback(isConnected);
+    }
+  }, interval);
+  
+  return () => {
+    if (connectionMonitorInterval) {
+      clearInterval(connectionMonitorInterval);
+    }
+  };
+};
+
+api.stopConnectionMonitoring = () => {
+  if (connectionMonitorInterval) {
+    clearInterval(connectionMonitorInterval);
+    connectionMonitorInterval = null;
+  }
+};
+
+// Check if authenticated
 api.isAuthenticated = () => {
-  const token =
-    localStorage.getItem('userToken') || localStorage.getItem('adminToken');
+  const token = localStorage.getItem('userToken') || localStorage.getItem('adminToken');
   return !!token;
 };
 
-// Add a method to get current user type
+// Get user type
 api.getUserType = () => {
   if (localStorage.getItem('adminToken')) return 'admin';
   if (localStorage.getItem('userToken')) return 'user';
   return null;
 };
 
-// Add a method to clear all auth data
+// Clear all auth data
 api.clearAuth = () => {
   localStorage.removeItem('userToken');
   localStorage.removeItem('userData');
@@ -166,5 +230,19 @@ api.clearAuth = () => {
   localStorage.removeItem('adminData');
   console.log('🔓 All auth data cleared');
 };
+
+// Add network status listener
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    console.log('🌐 Browser online - checking API connection');
+    dispatchConnectionEvent('online');
+    api.testConnection();
+  });
+  
+  window.addEventListener('offline', () => {
+    console.log('🌐 Browser offline');
+    dispatchConnectionEvent('offline');
+  });
+}
 
 export default api;
